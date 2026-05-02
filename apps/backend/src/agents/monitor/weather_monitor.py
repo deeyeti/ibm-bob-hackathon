@@ -19,24 +19,18 @@ from pydantic import BaseModel, Field
 
 logger = get_logger(__name__)
 
-# Try to import BeeAI - gracefully handle if not installed
+# Import BeeAI framework
 try:
-    from bee_agent import BeeAgent, Tool, ToolInput, ToolOutput
+    from bee_agent.agents.bee_agent import BeeAgent
+    from bee_agent.tools.base import Tool, ToolResult
     BEEAI_AVAILABLE = True
 except ImportError:
+    # Fallback if BeeAI not installed
+    BeeAgent = None
+    Tool = None
+    ToolResult = None
     BEEAI_AVAILABLE = False
-    logger.warning(
-        "BeeAI framework not installed. Install with: pip install bee-agent-framework"
-    )
-    # Create mock classes for type hints
-    class BeeAgent:  # type: ignore
-        pass
-    class Tool:  # type: ignore
-        pass
-    class ToolInput:  # type: ignore
-        pass
-    class ToolOutput:  # type: ignore
-        pass
+    logger.warning("BeeAI framework not available. BeeAI features will be disabled.")
 
 
 class WeatherAlert(Dict[str, Any]):
@@ -419,7 +413,7 @@ def get_vendors() -> List[Dict[str, Any]]:
         return []
 
 
-class WeatherCheckTool(Tool):
+class WeatherCheckTool(Tool if BEEAI_AVAILABLE else object):
     """Tool for checking current weather conditions."""
     
     def __init__(self, api_key: str):
@@ -431,22 +425,23 @@ class WeatherCheckTool(Tool):
         """
         self.api_key = api_key
         self.weather_service = WeatherService()
-        super().__init__(
-            name="check_weather",
-            description="Check current weather conditions for a location",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "location": {
-                        "type": "string",
-                        "description": "Location to check weather for (e.g., 'New York,US')"
-                    }
-                },
-                "required": ["location"]
-            }
-        )
+        if BEEAI_AVAILABLE:
+            super().__init__(
+                name="check_weather",
+                description="Check current weather conditions for a location",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "Location to check weather for (e.g., 'New York,US')"
+                        }
+                    },
+                    "required": ["location"]
+                }
+            )
     
-    async def execute(self, input_data: ToolInput) -> ToolOutput:
+    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute weather check.
         
@@ -459,51 +454,52 @@ class WeatherCheckTool(Tool):
         try:
             location = input_data.get("location", "")
             if not location:
-                return ToolOutput(
-                    success=False,
-                    error="Location parameter is required"
-                )
+                return {
+                    "success": False,
+                    "error": "Location parameter is required"
+                }
             
             # Initialize weather service if needed
-            if not hasattr(self.weather_service, '_initialized') or not self.weather_service._initialized:
+            if not hasattr(self.weather_service, 'client') or self.weather_service.client is None:
                 await self.weather_service.initialize()
             
             # Get weather data
             weather_data = await self.weather_service.get_weather(location)
             
-            return ToolOutput(
-                success=True,
-                data={
+            return {
+                "success": True,
+                "data": {
                     "condition": weather_data.description,
                     "temperature": weather_data.temperature,
                     "wind_speed": weather_data.wind_speed,
                     "humidity": weather_data.humidity,
                 }
-            )
+            }
         except Exception as e:
             logger.error(f"Error checking weather: {e}")
-            return ToolOutput(
-                success=False,
-                error=f"Failed to check weather: {str(e)}"
-            )
+            return {
+                "success": False,
+                "error": f"Failed to check weather: {str(e)}"
+            }
 
 
-class VendorRetrievalTool(Tool):
+class VendorRetrievalTool(Tool if BEEAI_AVAILABLE else object):
     """Tool for retrieving alternative freight vendors."""
     
     def __init__(self):
         """Initialize vendor retrieval tool."""
-        super().__init__(
-            name="get_alternative_vendors",
-            description="Get list of alternative freight vendors with eco-friendly fleets",
-            input_schema={
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-        )
+        if BEEAI_AVAILABLE:
+            super().__init__(
+                name="get_alternative_vendors",
+                description="Get list of alternative freight vendors with eco-friendly fleets",
+                input_schema={
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            )
     
-    async def execute(self, input_data: ToolInput) -> ToolOutput:
+    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute vendor retrieval.
         
@@ -515,16 +511,16 @@ class VendorRetrievalTool(Tool):
         """
         try:
             vendors = get_vendors()
-            return ToolOutput(
-                success=True,
-                data={"vendors": vendors}
-            )
+            return {
+                "success": True,
+                "data": {"vendors": vendors}
+            }
         except Exception as e:
             logger.error(f"Error retrieving vendors: {e}")
-            return ToolOutput(
-                success=False,
-                error=f"Failed to retrieve vendors: {str(e)}"
-            )
+            return {
+                "success": False,
+                "error": f"Failed to retrieve vendors: {str(e)}"
+            }
 
 
 class BeeAIWeatherMonitorAgent:
@@ -559,12 +555,6 @@ class BeeAIWeatherMonitorAgent:
             target_location: Location to monitor (defaults to TARGET_LOCATION env var)
             api_key: OpenWeather API key (defaults to OPENWEATHER_API_KEY env var)
         """
-        if not BEEAI_AVAILABLE:
-            raise ImportError(
-                "BeeAI framework is not installed. "
-                "Install with: pip install bee-agent-framework"
-            )
-        
         self.target_location = target_location or os.getenv('TARGET_LOCATION', 'New York,US')
         self.api_key = api_key or os.getenv('OPENWEATHER_API_KEY', '')
         
@@ -575,13 +565,16 @@ class BeeAIWeatherMonitorAgent:
         self.weather_tool = WeatherCheckTool(self.api_key)
         self.vendor_tool = VendorRetrievalTool()
         
-        # Initialize BeeAI agent
-        self.agent = BeeAgent(
-            name="WeatherMonitorAgent",
-            description="Monitor weather conditions and recommend reroutes for severe weather",
-            tools=[self.weather_tool, self.vendor_tool],
-            system_prompt=self._get_system_prompt(),
-        )
+        # Initialize BeeAI agent (only if available)
+        if BEEAI_AVAILABLE:
+            self.agent = BeeAgent(
+                name="WeatherMonitorAgent",
+                description="Monitor weather conditions and recommend reroutes for severe weather",
+                tools=[self.weather_tool, self.vendor_tool],
+                system_prompt=self._get_system_prompt(),
+            )
+        else:
+            self.agent = None
         
         logger.info(f"BeeAI Weather Monitor Agent initialized for location: {self.target_location}")
     
@@ -629,34 +622,38 @@ Return responses in JSON format matching the WeatherCheckResponse schema."""
         try:
             # Check weather using tool
             weather_result = await self.weather_tool.execute(
-                ToolInput(location=self.target_location)
+                {"location": self.target_location}
             )
             
-            if not weather_result.success:
-                logger.error(f"Weather check failed: {weather_result.error}")
+            if not weather_result.get("success"):
+                error_msg = weather_result.get("error", "Unknown error")
+                logger.error(f"Weather check failed: {error_msg}")
                 return WeatherCheckResponse(
                     status="error",
-                    reason=f"Failed to check weather: {weather_result.error}"
+                    reason=f"Failed to check weather: {error_msg}"
                 )
             
-            weather_condition = weather_result.data.get("condition", "")
+            weather_data = weather_result.get("data", {})
+            weather_condition = weather_data.get("condition", "")
             
             # Check if severe weather
             if self._is_severe_weather(weather_condition):
                 logger.warning(f"Severe weather detected: {weather_condition}")
                 
                 # Get alternative vendors
-                vendor_result = await self.vendor_tool.execute(ToolInput())
+                vendor_result = await self.vendor_tool.execute({})
                 
-                if vendor_result.success:
-                    vendors = vendor_result.data.get("vendors", [])
+                if vendor_result.get("success"):
+                    vendor_data = vendor_result.get("data", {})
+                    vendors = vendor_data.get("vendors", [])
                     return WeatherCheckResponse(
                         status="reroute_required",
                         reason=weather_condition,
                         alternative_vendors=vendors
                     )
                 else:
-                    logger.error(f"Failed to retrieve vendors: {vendor_result.error}")
+                    error_msg = vendor_result.get("error", "Unknown error")
+                    logger.error(f"Failed to retrieve vendors: {error_msg}")
                     return WeatherCheckResponse(
                         status="reroute_required",
                         reason=weather_condition,
@@ -719,10 +716,6 @@ async def create_beeai_weather_agent(
     Returns:
         Initialized agent or None if BeeAI not available
     """
-    if not BEEAI_AVAILABLE:
-        logger.error("BeeAI framework not available")
-        return None
-    
     try:
         agent = BeeAIWeatherMonitorAgent(
             target_location=target_location,

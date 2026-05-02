@@ -5,10 +5,13 @@ This script demonstrates how to use the BeeAI-based weather monitoring agent
 to check weather conditions and get reroute recommendations.
 
 Requirements:
-    - BeeAI framework installed: pip install bee-agent-framework
+    - BeeAI framework installed: pip install beeai-framework
     - Environment variables set: OPENWEATHER_API_KEY, TARGET_LOCATION
 """
-
+import sys
+import os
+sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath('src'))
 import asyncio
 import os
 import sys
@@ -20,7 +23,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from agents.monitor.weather_monitor import (
     BeeAIWeatherMonitorAgent,
     create_beeai_weather_agent,
-    BEEAI_AVAILABLE,
 )
 from utils.logger import get_logger
 
@@ -199,15 +201,6 @@ async def main():
     print("BeeAI Weather Monitor Agent - Examples")
     print("=" * 60)
     
-    # Check if BeeAI is available
-    if not BEEAI_AVAILABLE:
-        print("\n❌ BeeAI framework is not installed!")
-        print("\nTo install BeeAI:")
-        print("  pip install bee-agent-framework")
-        print("\nOr add to pyproject.toml dependencies:")
-        print('  "bee-agent-framework>=1.0.0"')
-        return
-    
     # Check for API key
     if not os.getenv("OPENWEATHER_API_KEY"):
         print("\n❌ OPENWEATHER_API_KEY environment variable not set!")
@@ -215,7 +208,6 @@ async def main():
         print("  export OPENWEATHER_API_KEY=your_key_here")
         return
     
-    print("\n✅ BeeAI framework is available")
     print("✅ API key is configured")
     
     # Run examples

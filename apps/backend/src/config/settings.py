@@ -30,9 +30,9 @@ class Settings(BaseSettings):
     reload: bool = Field(default=True, description="Auto-reload on code changes")
 
     # CORS Settings
-    cors_origins: str = Field(
-        default="http://localhost:3000,http://localhost:3001",
-        description="Allowed CORS origins (comma-separated)",
+    cors_origins: List[str] = Field(
+        default=["http://localhost:3000", "http://localhost:3001"],
+        description="Allowed CORS origins",
     )
     cors_allow_credentials: bool = Field(default=True, description="Allow credentials")
     cors_allow_methods: str = Field(default="*", description="Allowed HTTP methods")
