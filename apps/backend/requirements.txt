@@ -1,0 +1,39 @@
+# Eco-Shift Backend Requirements
+# Core dependencies with compatible versions
+
+# Web Framework
+fastapi==0.136.1
+uvicorn==0.46.0
+starlette==1.0.0
+
+# Data Validation
+pydantic==2.13.3
+pydantic-core==2.46.3
+pydantic-settings==2.14.0
+
+# HTTP Client
+httpx==0.28.1
+requests==2.33.1
+
+# IBM watsonx.ai
+ibm-watsonx-ai==1.5.10
+ibm-cos-sdk==2.14.3
+
+# Data Processing (compatible versions)
+numpy==2.4.4
+pandas==3.0.2
+
+# Environment Variables
+python-dotenv==1.2.2
+
+# Type Checking
+typing-extensions==4.15.0
+typing-inspection==0.4.2
+annotated-types==0.7.0
+
+# Utilities
+python-dateutil==2.9.0.post0
+pytz==2026.2
+tzdata==2026.2
+
+# Made with Bob
