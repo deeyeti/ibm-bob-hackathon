@@ -2,6 +2,8 @@
 IBM watsonx.ai service integration.
 """
 
+import asyncio
+import json
 from typing import Optional, Dict, Any, List
 from ibm_watsonx_ai import APIClient, Credentials
 from ibm_watsonx_ai.foundation_models import ModelInference
@@ -215,6 +217,88 @@ class WatsonxService:
 
         except Exception as e:
             logger.error(f"Chat failed: {e}")
+            raise
+
+    async def calculate_route_emissions(self, vendor_data: Dict[str, Any]) -> str:
+        """
+        Calculate route emissions and provide vendor recommendations using watsonx.ai.
+        
+        This function uses the IBM Granite 3 8B Instruct model to evaluate vendors and
+        calculate mock Scope 3 carbon footprint scores, with strong prioritization for
+        Hydrogen and Electric fleets.
+
+        Args:
+            vendor_data: Dictionary containing vendor information including fleet types,
+                        routes, and other relevant data
+
+        Returns:
+            Model's text response with vendor evaluation and carbon footprint analysis
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        try:
+            # Format vendor data as JSON string for the prompt
+            vendor_json = json.dumps(vendor_data, indent=2)
+            
+            # Create prompt that emphasizes hydrogen and electric fleet prioritization
+            prompt = f"""
+You are an expert carbon emissions analyst for logistics and supply chain operations.
+
+Analyze the following vendor data and provide a comprehensive evaluation:
+
+Vendor Data:
+{vendor_json}
+
+Your task:
+1. Evaluate each vendor based on their fleet type, routes, and operational characteristics
+2. Calculate a mock Scope 3 carbon footprint score for each vendor (in kg CO2e)
+3. STRONGLY PRIORITIZE vendors using 'Hydrogen' or 'Electric' fleets as the recommended choice
+4. Provide specific recommendations for emission reduction
+5. Rank vendors from best to worst in terms of environmental impact
+
+Important considerations:
+- Hydrogen and Electric fleets should be heavily favored due to zero direct emissions
+- Consider route efficiency, distance, and weather conditions
+- Provide quantitative carbon footprint estimates
+- Explain the reasoning behind your recommendations
+
+Format your response with:
+- Vendor rankings with carbon scores
+- Detailed analysis for each vendor
+- Clear recommendation of the best vendor choice
+- Specific emission reduction strategies
+"""
+
+            # Create a specific model instance for llama-3-3-70b-instruct
+            # This uses a supported model from the available watsonx models
+            granite_model = ModelInference(
+                model_id="meta-llama/llama-3-3-70b-instruct",
+                api_client=self.client,
+                project_id=settings.watsonx_project_id,
+            )
+            
+            # Use asyncio.to_thread to wrap synchronous IBM SDK call
+            # This follows the pattern mentioned in AGENTS.md for async compatibility
+            parameters = {
+                "max_new_tokens": 1000,
+                "temperature": 0.5,  # Lower temperature for more consistent analysis
+                "top_p": 0.95,
+                "top_k": 50,
+            }
+            
+            # Wrap synchronous generate_text call in asyncio.to_thread
+            response = await asyncio.to_thread(
+                granite_model.generate_text,
+                prompt=prompt,
+                params=parameters
+            )
+            
+            logger.info("Route emissions calculation successful using ibm/granite-3-8b-instruct")
+            return response
+
+        except Exception as e:
+            logger.error(f"Route emissions calculation failed: {e}", exc_info=True)
             raise
 
     async def close(self) -> None:

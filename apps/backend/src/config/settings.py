@@ -3,7 +3,7 @@ Application configuration using pydantic-settings.
 """
 
 from typing import List, Optional
-from pydantic import Field, validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,9 +30,9 @@ class Settings(BaseSettings):
     reload: bool = Field(default=True, description="Auto-reload on code changes")
 
     # CORS Settings
-    cors_origins: List[str] = Field(
-        default=["http://localhost:3000", "http://localhost:3001"],
-        description="Allowed CORS origins",
+    cors_origins: str = Field(
+        default="http://localhost:3000,http://localhost:3001",
+        description="Allowed CORS origins (comma-separated)",
     )
     cors_allow_credentials: bool = Field(default=True, description="Allow credentials")
     cors_allow_methods: str = Field(default="*", description="Allowed HTTP methods")
@@ -115,7 +115,8 @@ class Settings(BaseSettings):
         description="Enable real-time monitoring",
     )
 
-    @validator("cors_origins", pre=True)
+    @field_validator("cors_origins", mode="after")
+    @classmethod
     def parse_cors_origins(cls, v: str) -> List[str]:
         """Parse comma-separated CORS origins into a list."""
         if isinstance(v, str):
