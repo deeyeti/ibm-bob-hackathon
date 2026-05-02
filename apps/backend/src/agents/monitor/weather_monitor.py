@@ -1,17 +1,42 @@
 """
 Weather monitoring module for the Monitor Agent.
+
+This module provides both traditional and BeeAI-based weather monitoring agents.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime, timedelta
 import asyncio
+import os
+import json
 
 from src.services.weather_service import WeatherService
 from src.models.schemas import WeatherData
 from src.utils.logger import get_logger
 from .config import MonitorConfig
+from .vendors import vendor_manager, FreightVendor
+from pydantic import BaseModel, Field
 
 logger = get_logger(__name__)
+
+# Try to import BeeAI - gracefully handle if not installed
+try:
+    from bee_agent import BeeAgent, Tool, ToolInput, ToolOutput
+    BEEAI_AVAILABLE = True
+except ImportError:
+    BEEAI_AVAILABLE = False
+    logger.warning(
+        "BeeAI framework not installed. Install with: pip install bee-agent-framework"
+    )
+    # Create mock classes for type hints
+    class BeeAgent:  # type: ignore
+        pass
+    class Tool:  # type: ignore
+        pass
+    class ToolInput:  # type: ignore
+        pass
+    class ToolOutput:  # type: ignore
+        pass
 
 
 class WeatherAlert(Dict[str, Any]):
@@ -342,6 +367,371 @@ class WeatherMonitor:
             location: timestamp.isoformat()
             for location, timestamp in self._alert_history.items()
         }
+
+
+# Made with Bob
+
+# ============================================================================
+# BeeAI-Based Weather Monitor Agent
+# ============================================================================
+
+
+class WeatherCheckResponse(BaseModel):
+    """Response model for weather check results."""
+    status: str = Field(description="Status: 'clear' or 'reroute_required'")
+    weather: Optional[str] = Field(default=None, description="Weather condition description")
+    reason: Optional[str] = Field(default=None, description="Reason for reroute if required")
+    alternative_vendors: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="List of alternative vendors if reroute required"
+    )
+
+
+def get_vendors() -> List[Dict[str, Any]]:
+    """
+    Get list of alternative freight vendors.
+    
+    Returns:
+        List of vendor dictionaries with details
+    """
+    try:
+        vendors = vendor_manager.get_eco_friendly_vendors(min_rating=4.5)
+        return [
+            {
+                "id": v.id,
+                "name": v.name,
+                "location": v.location,
+                "fleet_type": v.fleet_type.value,
+                "fleet_size": v.fleet_size,
+                "capacity_tons": v.capacity_tons,
+                "eco_rating": v.eco_rating,
+                "reliability_score": v.reliability_score,
+                "cost_per_mile": v.cost_per_mile,
+                "carbon_emissions_kg_per_mile": v.carbon_emissions_kg_per_mile,
+                "service_areas": v.service_areas,
+                "contact_email": v.contact_email,
+                "contact_phone": v.contact_phone,
+            }
+            for v in vendors
+        ]
+    except Exception as e:
+        logger.error(f"Error retrieving vendors: {e}")
+        return []
+
+
+class WeatherCheckTool(Tool):
+    """Tool for checking current weather conditions."""
+    
+    def __init__(self, api_key: str):
+        """
+        Initialize weather check tool.
+        
+        Args:
+            api_key: OpenWeather API key
+        """
+        self.api_key = api_key
+        self.weather_service = WeatherService()
+        super().__init__(
+            name="check_weather",
+            description="Check current weather conditions for a location",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "Location to check weather for (e.g., 'New York,US')"
+                    }
+                },
+                "required": ["location"]
+            }
+        )
+    
+    async def execute(self, input_data: ToolInput) -> ToolOutput:
+        """
+        Execute weather check.
+        
+        Args:
+            input_data: Tool input containing location
+            
+        Returns:
+            Tool output with weather condition description
+        """
+        try:
+            location = input_data.get("location", "")
+            if not location:
+                return ToolOutput(
+                    success=False,
+                    error="Location parameter is required"
+                )
+            
+            # Initialize weather service if needed
+            if not hasattr(self.weather_service, '_initialized') or not self.weather_service._initialized:
+                await self.weather_service.initialize()
+            
+            # Get weather data
+            weather_data = await self.weather_service.get_weather(location)
+            
+            return ToolOutput(
+                success=True,
+                data={
+                    "condition": weather_data.description,
+                    "temperature": weather_data.temperature,
+                    "wind_speed": weather_data.wind_speed,
+                    "humidity": weather_data.humidity,
+                }
+            )
+        except Exception as e:
+            logger.error(f"Error checking weather: {e}")
+            return ToolOutput(
+                success=False,
+                error=f"Failed to check weather: {str(e)}"
+            )
+
+
+class VendorRetrievalTool(Tool):
+    """Tool for retrieving alternative freight vendors."""
+    
+    def __init__(self):
+        """Initialize vendor retrieval tool."""
+        super().__init__(
+            name="get_alternative_vendors",
+            description="Get list of alternative freight vendors with eco-friendly fleets",
+            input_schema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        )
+    
+    async def execute(self, input_data: ToolInput) -> ToolOutput:
+        """
+        Execute vendor retrieval.
+        
+        Args:
+            input_data: Tool input (no parameters required)
+            
+        Returns:
+            Tool output with list of vendors
+        """
+        try:
+            vendors = get_vendors()
+            return ToolOutput(
+                success=True,
+                data={"vendors": vendors}
+            )
+        except Exception as e:
+            logger.error(f"Error retrieving vendors: {e}")
+            return ToolOutput(
+                success=False,
+                error=f"Failed to retrieve vendors: {str(e)}"
+            )
+
+
+class BeeAIWeatherMonitorAgent:
+    """
+    BeeAI-based Weather Monitor Agent for detecting severe weather and recommending reroutes.
+    
+    This agent uses the BeeAI framework to:
+    1. Check weather conditions for a target location
+    2. Detect severe weather patterns
+    3. Retrieve alternative vendors when rerouting is needed
+    
+    Environment Variables Required:
+        - TARGET_LOCATION: Location to monitor (e.g., 'New York,US')
+        - OPENWEATHER_API_KEY: OpenWeather API key
+    """
+    
+    # Severe weather keywords
+    SEVERE_KEYWORDS = [
+        'storm', 'hurricane', 'tornado', 'blizzard', 'extreme',
+        'severe', 'heavy', 'cyclone', 'typhoon', 'thunderstorm'
+    ]
+    
+    def __init__(
+        self,
+        target_location: Optional[str] = None,
+        api_key: Optional[str] = None,
+    ):
+        """
+        Initialize BeeAI Weather Monitor Agent.
+        
+        Args:
+            target_location: Location to monitor (defaults to TARGET_LOCATION env var)
+            api_key: OpenWeather API key (defaults to OPENWEATHER_API_KEY env var)
+        """
+        if not BEEAI_AVAILABLE:
+            raise ImportError(
+                "BeeAI framework is not installed. "
+                "Install with: pip install bee-agent-framework"
+            )
+        
+        self.target_location = target_location or os.getenv('TARGET_LOCATION', 'New York,US')
+        self.api_key = api_key or os.getenv('OPENWEATHER_API_KEY', '')
+        
+        if not self.api_key:
+            raise ValueError("OPENWEATHER_API_KEY environment variable is required")
+        
+        # Initialize tools
+        self.weather_tool = WeatherCheckTool(self.api_key)
+        self.vendor_tool = VendorRetrievalTool()
+        
+        # Initialize BeeAI agent
+        self.agent = BeeAgent(
+            name="WeatherMonitorAgent",
+            description="Monitor weather conditions and recommend reroutes for severe weather",
+            tools=[self.weather_tool, self.vendor_tool],
+            system_prompt=self._get_system_prompt(),
+        )
+        
+        logger.info(f"BeeAI Weather Monitor Agent initialized for location: {self.target_location}")
+    
+    def _get_system_prompt(self) -> str:
+        """
+        Get system prompt for the agent.
+        
+        Returns:
+            System prompt string
+        """
+        return f"""You are a weather monitoring agent for freight logistics.
+
+Your task is to:
+1. Check weather conditions for the target location: {self.target_location}
+2. Determine if weather is severe (contains keywords: {', '.join(self.SEVERE_KEYWORDS)})
+3. If severe weather detected:
+   - Get alternative vendors
+   - Return status 'reroute_required' with reason and vendor list
+4. If weather is clear:
+   - Return status 'clear' with weather description
+
+Always use the available tools to gather information before making decisions.
+Return responses in JSON format matching the WeatherCheckResponse schema."""
+    
+    def _is_severe_weather(self, weather_condition: str) -> bool:
+        """
+        Check if weather condition indicates severe weather.
+        
+        Args:
+            weather_condition: Weather condition description
+            
+        Returns:
+            True if severe weather detected
+        """
+        condition_lower = weather_condition.lower()
+        return any(keyword in condition_lower for keyword in self.SEVERE_KEYWORDS)
+    
+    async def check_weather(self) -> WeatherCheckResponse:
+        """
+        Check weather and determine if rerouting is needed.
+        
+        Returns:
+            WeatherCheckResponse with status and recommendations
+        """
+        try:
+            # Check weather using tool
+            weather_result = await self.weather_tool.execute(
+                ToolInput(location=self.target_location)
+            )
+            
+            if not weather_result.success:
+                logger.error(f"Weather check failed: {weather_result.error}")
+                return WeatherCheckResponse(
+                    status="error",
+                    reason=f"Failed to check weather: {weather_result.error}"
+                )
+            
+            weather_condition = weather_result.data.get("condition", "")
+            
+            # Check if severe weather
+            if self._is_severe_weather(weather_condition):
+                logger.warning(f"Severe weather detected: {weather_condition}")
+                
+                # Get alternative vendors
+                vendor_result = await self.vendor_tool.execute(ToolInput())
+                
+                if vendor_result.success:
+                    vendors = vendor_result.data.get("vendors", [])
+                    return WeatherCheckResponse(
+                        status="reroute_required",
+                        reason=weather_condition,
+                        alternative_vendors=vendors
+                    )
+                else:
+                    logger.error(f"Failed to retrieve vendors: {vendor_result.error}")
+                    return WeatherCheckResponse(
+                        status="reroute_required",
+                        reason=weather_condition,
+                        alternative_vendors=[]
+                    )
+            else:
+                logger.info(f"Clear weather conditions: {weather_condition}")
+                return WeatherCheckResponse(
+                    status="clear",
+                    weather=weather_condition
+                )
+                
+        except Exception as e:
+            logger.error(f"Error in weather check: {e}", exc_info=True)
+            return WeatherCheckResponse(
+                status="error",
+                reason=f"Error checking weather: {str(e)}"
+            )
+    
+    async def run(self) -> Dict[str, Any]:
+        """
+        Run the agent to check weather and provide recommendations.
+        
+        Returns:
+            Dictionary with agent response
+        """
+        try:
+            response = await self.check_weather()
+            return response.model_dump()
+        except Exception as e:
+            logger.error(f"Error running agent: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "reason": f"Agent execution failed: {str(e)}"
+            }
+    
+    async def close(self) -> None:
+        """Close agent and cleanup resources."""
+        if hasattr(self.weather_tool.weather_service, 'close'):
+            await self.weather_tool.weather_service.close()
+        logger.info("BeeAI Weather Monitor Agent closed")
+
+
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+
+async def create_beeai_weather_agent(
+    target_location: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> Optional[BeeAIWeatherMonitorAgent]:
+    """
+    Create and initialize a BeeAI Weather Monitor Agent.
+    
+    Args:
+        target_location: Location to monitor
+        api_key: OpenWeather API key
+        
+    Returns:
+        Initialized agent or None if BeeAI not available
+    """
+    if not BEEAI_AVAILABLE:
+        logger.error("BeeAI framework not available")
+        return None
+    
+    try:
+        agent = BeeAIWeatherMonitorAgent(
+            target_location=target_location,
+            api_key=api_key
+        )
+        return agent
+    except Exception as e:
+        logger.error(f"Failed to create BeeAI agent: {e}")
+        return None
 
 
 # Made with Bob

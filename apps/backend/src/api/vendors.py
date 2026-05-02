@@ -6,6 +6,7 @@ from typing import List, Dict, Any
 from fastapi import APIRouter, HTTPException, Query, status
 
 from src.models import Vendor, VendorRecommendation, VendorSearchRequest, VendorCategory
+from src.agents.monitor.vendors import FREIGHT_VENDORS, FleetType
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -248,6 +249,59 @@ async def get_vendor_categories() -> List[str]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve vendor categories",
+        )
+
+
+@router.get("/freight/", response_model=List[Dict[str, Any]])
+async def get_freight_vendors() -> List[Dict[str, Any]]:
+    """
+    Get list of alternative freight vendors.
+    
+    Returns 5 freight vendors prioritizing alternative energy fleets
+    (hydrogen and electric) over traditional diesel fleets.
+    
+    Returns:
+        List of 5 freight vendor dictionaries with complete vendor information
+    """
+    try:
+        # Select 5 vendors prioritizing alternative energy fleets
+        # 2 hydrogen, 2 electric, 1 diesel for comparison
+        selected_vendors = []
+        
+        # Get hydrogen vendors (first 2)
+        hydrogen_vendors = [v for v in FREIGHT_VENDORS if v["fleet_type"] == FleetType.HYDROGEN]
+        selected_vendors.extend(hydrogen_vendors[:2])
+        
+        # Get electric vendors (next 2)
+        electric_vendors = [v for v in FREIGHT_VENDORS if v["fleet_type"] == FleetType.ELECTRIC]
+        selected_vendors.extend(electric_vendors[:2])
+        
+        # Get one diesel vendor for comparison
+        diesel_vendors = [v for v in FREIGHT_VENDORS if v["fleet_type"] == FleetType.DIESEL]
+        if not diesel_vendors:
+            # If no diesel, get a hybrid instead
+            hybrid_vendors = [v for v in FREIGHT_VENDORS if v["fleet_type"] == FleetType.HYBRID]
+            if hybrid_vendors:
+                selected_vendors.append(hybrid_vendors[0])
+        else:
+            selected_vendors.append(diesel_vendors[0])
+        
+        # Convert FleetType enum to string for JSON serialization
+        result = []
+        for vendor in selected_vendors[:5]:  # Ensure we only return 5
+            vendor_dict = vendor.copy()
+            vendor_dict["fleet_type"] = vendor_dict["fleet_type"].value
+            vendor_dict["status"] = vendor_dict["status"].value
+            result.append(vendor_dict)
+        
+        logger.info(f"Returning {len(result)} freight vendors")
+        return result
+    
+    except Exception as e:
+        logger.error(f"Failed to get freight vendors: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve freight vendors",
         )
 
 # Made with Bob
