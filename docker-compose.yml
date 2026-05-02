@@ -1,0 +1,154 @@
+version: '3.8'
+
+services:
+  # =============================================================================
+  # Frontend Service - Next.js Application
+  # =============================================================================
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: ecoshift-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://backend:8000
+      - WATCHPACK_POLLING=true
+    volumes:
+      - ./apps/frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    networks:
+      - ecoshift-network
+    restart: unless-stopped
+    command: npm run dev
+
+  # =============================================================================
+  # Backend Service - FastAPI Application
+  # =============================================================================
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: ecoshift-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - BACKEND_HOST=0.0.0.0
+      - BACKEND_PORT=8000
+      - BACKEND_RELOAD=true
+      - FRONTEND_URL=http://frontend:3000
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - WATSONX_API_KEY=${WATSONX_API_KEY}
+      - WATSONX_PROJECT_ID=${WATSONX_PROJECT_ID}
+      - WATSONX_URL=${WATSONX_URL:-https://us-south.ml.cloud.ibm.com}
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=${DATABASE_URL:-postgresql://ecoshift:ecoshift@postgres:5432/ecoshift}
+    volumes:
+      - ./apps/backend:/app
+      - backend-logs:/app/logs
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - ecoshift-network
+    restart: unless-stopped
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # =============================================================================
+  # Redis Service - Caching Layer
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: ecoshift-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - ecoshift-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # =============================================================================
+  # PostgreSQL Service - Data Persistence
+  # =============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: ecoshift-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=ecoshift
+      - POSTGRES_USER=ecoshift
+      - POSTGRES_PASSWORD=ecoshift
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - ecoshift-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ecoshift"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # =============================================================================
+  # PgAdmin Service - Database Management (Optional)
+  # =============================================================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: ecoshift-pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@ecoshift.local
+      - PGADMIN_DEFAULT_PASSWORD=admin
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - ecoshift-network
+    restart: unless-stopped
+    profiles:
+      - tools
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  ecoshift-network:
+    driver: bridge
+    name: ecoshift-network
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  redis-data:
+    name: ecoshift-redis-data
+  postgres-data:
+    name: ecoshift-postgres-data
+  pgadmin-data:
+    name: ecoshift-pgadmin-data
+  backend-logs:
+    name: ecoshift-backend-logs
+
+# Made with Bob

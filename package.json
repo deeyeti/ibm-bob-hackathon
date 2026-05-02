@@ -1,0 +1,78 @@
+{
+  "name": "eco-shift",
+  "version": "1.0.0",
+  "description": "AI-powered logistics optimization platform for sustainable supply chain management",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:frontend": "cd apps/frontend && npm run dev",
+    "dev:backend": "cd apps/backend && uvicorn src.main:app --reload --host 0.0.0.0 --port 8000",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "cd apps/frontend && npm run build",
+    "build:backend": "cd apps/backend && pip install -r requirements.txt",
+    "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "start:frontend": "cd apps/frontend && npm start",
+    "start:backend": "cd apps/backend && uvicorn src.main:app --host 0.0.0.0 --port 8000",
+    "test": "npm run test:frontend && npm run test:backend",
+    "test:frontend": "cd apps/frontend && npm test",
+    "test:backend": "cd apps/backend && pytest",
+    "test:watch": "npm run test:frontend -- --watch",
+    "lint": "npm run lint:frontend && npm run lint:backend",
+    "lint:frontend": "cd apps/frontend && npm run lint",
+    "lint:backend": "cd apps/backend && flake8 src/ tests/",
+    "lint:fix": "npm run lint:frontend -- --fix",
+    "format": "npm run format:frontend && npm run format:backend",
+    "format:frontend": "cd apps/frontend && prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
+    "format:backend": "cd apps/backend && black src/ tests/",
+    "type-check": "cd apps/frontend && tsc --noEmit",
+    "clean": "npm run clean:frontend && npm run clean:backend",
+    "clean:frontend": "cd apps/frontend && rm -rf .next node_modules",
+    "clean:backend": "cd apps/backend && find . -type d -name __pycache__ -exec rm -rf {} + && rm -rf .pytest_cache .mypy_cache",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:restart": "docker-compose restart",
+    "docker:clean": "docker-compose down -v --remove-orphans",
+    "setup": "npm run setup:frontend && npm run setup:backend",
+    "setup:frontend": "cd apps/frontend && npm install",
+    "setup:backend": "cd apps/backend && pip install -r requirements.txt",
+    "setup:env": "node scripts/setup-env.js",
+    "agents:status": "cd apps/backend && python -m src.agents.orchestrator.cli status",
+    "agents:start": "cd apps/backend && python -m src.agents.orchestrator.cli start",
+    "agents:stop": "cd apps/backend && python -m src.agents.orchestrator.cli stop",
+    "db:migrate": "cd apps/backend && alembic upgrade head",
+    "db:rollback": "cd apps/backend && alembic downgrade -1",
+    "db:reset": "cd apps/backend && alembic downgrade base && alembic upgrade head",
+    "logs": "tail -f apps/backend/logs/app.log",
+    "health": "curl http://localhost:8000/health && curl http://localhost:3000/api/health"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "prettier": "^3.1.1"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0",
+    "python": ">=3.11.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/eco-shift.git"
+  },
+  "keywords": [
+    "logistics",
+    "ai",
+    "sustainability",
+    "supply-chain",
+    "emissions",
+    "optimization",
+    "ibm-watsonx"
+  ],
+  "author": "Eco-Shift Team",
+  "license": "MIT"
+}
