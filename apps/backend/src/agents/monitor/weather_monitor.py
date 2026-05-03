@@ -19,18 +19,12 @@ from pydantic import BaseModel, Field
 
 logger = get_logger(__name__)
 
-# Import BeeAI framework
-try:
-    from bee_agent.agents.bee_agent import BeeAgent
-    from bee_agent.tools.base import Tool, ToolResult
-    BEEAI_AVAILABLE = True
-except ImportError:
-    # Fallback if BeeAI not installed
-    BeeAgent = None
-    Tool = None
-    ToolResult = None
-    BEEAI_AVAILABLE = False
-    logger.warning("BeeAI framework not available. BeeAI features will be disabled.")
+# BeeAI-style architecture (custom implementation)
+# Note: This uses a custom tool-based architecture inspired by BeeAI patterns
+BEEAI_AVAILABLE = False  # Using custom implementation, not external framework
+BeeAgent = None
+Tool = object  # Base class for custom tools
+ToolResult = None
 
 
 class WeatherAlert(Dict[str, Any]):
@@ -413,7 +407,7 @@ def get_vendors() -> List[Dict[str, Any]]:
         return []
 
 
-class WeatherCheckTool(Tool if BEEAI_AVAILABLE else object):
+class WeatherCheckTool(object):
     """Tool for checking current weather conditions."""
     
     def __init__(self, api_key: str):
@@ -425,21 +419,7 @@ class WeatherCheckTool(Tool if BEEAI_AVAILABLE else object):
         """
         self.api_key = api_key
         self.weather_service = WeatherService()
-        if BEEAI_AVAILABLE:
-            super().__init__(
-                name="check_weather",
-                description="Check current weather conditions for a location",
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "location": {
-                            "type": "string",
-                            "description": "Location to check weather for (e.g., 'New York,US')"
-                        }
-                    },
-                    "required": ["location"]
-                }
-            )
+        # Custom tool implementation (not using external framework)
     
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -483,21 +463,12 @@ class WeatherCheckTool(Tool if BEEAI_AVAILABLE else object):
             }
 
 
-class VendorRetrievalTool(Tool if BEEAI_AVAILABLE else object):
+class VendorRetrievalTool(object):
     """Tool for retrieving alternative freight vendors."""
     
     def __init__(self):
         """Initialize vendor retrieval tool."""
-        if BEEAI_AVAILABLE:
-            super().__init__(
-                name="get_alternative_vendors",
-                description="Get list of alternative freight vendors with eco-friendly fleets",
-                input_schema={
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                }
-            )
+        # Custom tool implementation (not using external framework)
     
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -525,9 +496,9 @@ class VendorRetrievalTool(Tool if BEEAI_AVAILABLE else object):
 
 class BeeAIWeatherMonitorAgent:
     """
-    BeeAI-based Weather Monitor Agent for detecting severe weather and recommending reroutes.
+    Enhanced Weather Monitor Agent for detecting severe weather and recommending reroutes.
     
-    This agent uses the BeeAI framework to:
+    This agent uses a tool-based architecture to:
     1. Check weather conditions for a target location
     2. Detect severe weather patterns
     3. Retrieve alternative vendors when rerouting is needed
@@ -565,18 +536,10 @@ class BeeAIWeatherMonitorAgent:
         self.weather_tool = WeatherCheckTool(self.api_key)
         self.vendor_tool = VendorRetrievalTool()
         
-        # Initialize BeeAI agent (only if available)
-        if BEEAI_AVAILABLE:
-            self.agent = BeeAgent(
-                name="WeatherMonitorAgent",
-                description="Monitor weather conditions and recommend reroutes for severe weather",
-                tools=[self.weather_tool, self.vendor_tool],
-                system_prompt=self._get_system_prompt(),
-            )
-        else:
-            self.agent = None
+        # Using custom tool-based implementation
+        self.agent = None
         
-        logger.info(f"BeeAI Weather Monitor Agent initialized for location: {self.target_location}")
+        logger.info(f"Enhanced Weather Monitor Agent initialized for location: {self.target_location}")
     
     def _get_system_prompt(self) -> str:
         """
