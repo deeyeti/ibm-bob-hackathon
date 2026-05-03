@@ -2,7 +2,9 @@
 
 **AI-Powered Logistics Optimization for Sustainable Supply Chain Management**
 
-Eco-Shift is an intelligent multi-agent platform that leverages IBM watsonx.ai, the IBM Bee AI framework, and real-time weather data to optimize logistics operations, reduce carbon emissions, and promote sustainable supply chain practices.
+Eco-Shift is an intelligent logistics platform that mitigates weather-related supply chain disruptions without compromising environmental goals. Built using the BeeAI framework and IBM watsonx.ai, it deploys autonomous AI agents to monitor global shipping routes for severe weather.
+
+When a disruption is detected, the system doesn't just look for the fastest detour. It automatically pulls alternative regional vendors, calculates their Scope 3 carbon emissions, and intelligently reroutes freight to prioritize green fleets (such as hydrogen or electric).
 
 Deployment ready on IBM cloud.
 
