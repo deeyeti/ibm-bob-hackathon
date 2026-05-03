@@ -1,7 +1,7 @@
 """
-BeeAI-based Auditor Agent for emissions analysis and vendor recommendations.
+Enhanced Auditor Agent for emissions analysis and vendor recommendations.
 
-This module implements the Auditor Agent using the BeeAI framework to:
+This module implements the Auditor Agent using a tool-based architecture to:
 1. Accept alternative_vendors payload from Monitor Agent
 2. Calculate route emissions using watsonx.ai
 3. Parse AI response and return structured JSON with vendor recommendations
@@ -18,40 +18,19 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Import BeeAI framework
-try:
-    from bee_agent.agents.bee_agent import BeeAgent
-    from bee_agent.tools.base import Tool, ToolResult
-    BEEAI_AVAILABLE = True
-except ImportError:
-    # Fallback if BeeAI not installed
-    BeeAgent = None
-    Tool = None
-    ToolResult = None
-    BEEAI_AVAILABLE = False
-    logger.warning("BeeAI framework not available. Using fallback implementation.")
+# Custom tool-based architecture (not using external framework)
+BEEAI_AVAILABLE = False
+BeeAgent = None
+Tool = object
+ToolResult = None
 
 
-class EmissionsCalculationTool(Tool if BEEAI_AVAILABLE else object):
+class EmissionsCalculationTool(object):
     """Tool for calculating route emissions using watsonx.ai."""
     
     def __init__(self):
         """Initialize emissions calculation tool."""
-        if BEEAI_AVAILABLE:
-            super().__init__(
-                name="calculate_emissions",
-                description="Calculate route emissions and analyze vendors using IBM watsonx.ai",
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "vendor_data": {
-                            "type": "object",
-                            "description": "Vendor data including fleet types, routes, and characteristics"
-                        }
-                    },
-                    "required": ["vendor_data"]
-                }
-            )
+        # Custom tool implementation (not using external framework)
     
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -95,7 +74,7 @@ class EmissionsCalculationTool(Tool if BEEAI_AVAILABLE else object):
 
 class BeeAIAuditorAgent:
     """
-    BeeAI-based Auditor Agent for vendor emissions analysis.
+    Enhanced Auditor Agent for vendor emissions analysis.
     
     This agent:
     1. Accepts alternative_vendors payload from Monitor Agent
@@ -105,22 +84,14 @@ class BeeAIAuditorAgent:
     """
     
     def __init__(self):
-        """Initialize BeeAI Auditor Agent."""
+        """Initialize Enhanced Auditor Agent."""
         # Initialize emissions calculation tool
         self.emissions_tool = EmissionsCalculationTool()
         
-        # Initialize BeeAI agent (only if available)
-        if BEEAI_AVAILABLE:
-            self.agent = BeeAgent(
-                name="AuditorAgent",
-                description="Analyze vendor emissions and recommend optimal vendors",
-                tools=[self.emissions_tool],
-                system_prompt=self._get_system_prompt(),
-            )
-        else:
-            self.agent = None
+        # Using custom tool-based implementation
+        self.agent = None
         
-        logger.info("BeeAI Auditor Agent initialized")
+        logger.info("Enhanced Auditor Agent initialized")
     
     def _get_system_prompt(self) -> str:
         """

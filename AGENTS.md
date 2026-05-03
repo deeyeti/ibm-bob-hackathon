@@ -4,13 +4,20 @@ This file provides guidance to AI agents when working with the Eco-Shift codebas
 
 ## Project Overview
 
-**Eco-Shift** is a multi-agent logistics optimization platform that uses IBM watsonx.ai and real-time weather data to reduce carbon emissions in supply chains. The system employs three coordinating agents (Monitor, Auditor, Orchestrator) that communicate via a custom message bus.
+**Eco-Shift** is a multi-agent logistics optimization platform that uses IBM watsonx.ai and real-time weather data to reduce carbon emissions in supply chains. The system employs three coordinating agents (Monitor, Auditor, Orchestrator) powered by the **IBM Bee AI framework**.
 
 **Key Technologies:**
 - Frontend: Next.js 14.2.3 (App Router), React 18.3.1, TypeScript 5.4.5, Tailwind CSS 3.4.3, GSAP 3.12.5
 - Backend: Python 3.10+, FastAPI 0.109.0+, Pydantic 2.5.3+, IBM watsonx.ai 0.2.6+
-- Agent Framework: Custom multi-agent system with pub/sub message bus
-- APIs: OpenWeather API, IBM watsonx.ai (Granite models)
+- **Agent Framework: IBM Bee AI framework (with legacy fallback support)**
+- APIs: OpenWeather API, IBM watsonx.ai (Granite/Llama models)
+
+**🆕 BeeAI Framework Integration:**
+The system now uses the IBM Bee AI framework for agent implementation, providing:
+- Modern tool-based architecture
+- Enhanced AI integration with watsonx.ai
+- Better error handling and lifecycle management
+- Backward compatibility with legacy agents
 
 ## Build, Test, and Lint Commands
 
@@ -415,3 +422,239 @@ Agent status (running/stopped) is stored in memory only. Restarting the backend 
 
 **Last Updated:** 2026-05-02  
 **Maintained By:** Eco-Shift Development Team
+# ============================================================================
+# BeeAI Framework Integration
+# ============================================================================
+
+## BeeAI Agent Architecture
+
+The Eco-Shift system now uses the **IBM Bee AI framework** for agent implementation. This provides a modern, tool-based architecture with enhanced AI capabilities.
+
+### BeeAI vs Legacy Agents
+
+| Feature | BeeAI Agents | Legacy Agents |
+|---------|--------------|---------------|
+| Framework | IBM Bee AI | Custom |
+| Tools | Modular tool system | Integrated methods |
+| AI Integration | Built-in watsonx.ai | Manual integration |
+| Extensibility | Easy to add tools | Requires code changes |
+| Error Handling | Framework-managed | Manual |
+| Lifecycle | Framework-managed | Manual |
+
+### BeeAI Agent Components
+
+#### 1. BeeAIWeatherMonitorAgent
+**Location**: `apps/backend/src/agents/monitor/weather_monitor.py`
+
+**Tools**:
+- `WeatherCheckTool` - Checks current weather conditions
+- `VendorRetrievalTool` - Retrieves eco-friendly vendors
+
+**Usage**:
+```python
+from src.agents.monitor.weather_monitor import BeeAIWeatherMonitorAgent
+
+agent = BeeAIWeatherMonitorAgent(
+    target_location="New York,US",
+    api_key=os.getenv("OPENWEATHER_API_KEY")
+)
+
+result = await agent.check_weather()
+# Returns: {status, weather/reason, alternative_vendors}
+```
+
+**Response Format**:
+```json
+{
+  "status": "reroute_required",
+  "reason": "heavy thunderstorm",
+  "alternative_vendors": [...]
+}
+```
+
+#### 2. BeeAIAuditorAgent
+**Location**: `apps/backend/src/agents/auditor/beeai_auditor.py`
+
+**Tools**:
+- `EmissionsCalculationTool` - Calculates emissions using watsonx.ai
+
+**Usage**:
+```python
+from src.agents.auditor.beeai_auditor import BeeAIAuditorAgent
+
+agent = BeeAIAuditorAgent()
+
+result = await agent.analyze_vendors({
+    "vendors": vendor_list,
+    "location": "New York,US"
+})
+# Returns: {approved_vendor_id, emissions_saving, justification}
+```
+
+**Response Format**:
+```json
+{
+  "status": "success",
+  "approved_vendor_id": "vendor_001",
+  "emissions_saving": "100% (zero direct emissions)",
+  "justification": "Selected hydrogen fleet...",
+  "vendors_analyzed": 4
+}
+```
+
+#### 3. Enhanced Orchestrator
+**Location**: `apps/backend/src/agents/orchestrator/orchestrator_agent.py`
+
+**Features**:
+- Coordinates BeeAI agents
+- Backward compatible with legacy agents
+- Automatic response format detection
+- Feature flag controlled
+
+**Configuration**:
+```python
+# Enable BeeAI agents (default)
+config = OrchestratorConfig(use_beeai=True)
+
+# Or via environment variable
+USE_BEEAI=true
+```
+
+### BeeAI Configuration
+
+#### Environment Variables
+```bash
+# BeeAI Framework
+USE_BEEAI=true                    # Enable BeeAI agents
+BEEAI_LOG_LEVEL=INFO              # BeeAI logging level
+BEEAI_TIMEOUT=30                  # Agent timeout (seconds)
+
+# Required API Keys
+OPENWEATHER_API_KEY=your_key      # Weather data
+WATSONX_API_KEY=your_key          # IBM watsonx.ai
+WATSONX_PROJECT_ID=your_project   # watsonx.ai project
+```
+
+#### Settings Configuration
+```python
+# apps/backend/src/config/settings.py
+use_beeai: bool = True            # Use BeeAI framework
+beeai_log_level: str = "INFO"     # Logging level
+beeai_timeout: int = 30           # Timeout in seconds
+```
+
+### BeeAI Workflow Patterns
+
+#### Pattern 1: Weather Monitoring → Vendor Analysis
+```python
+# 1. Check weather
+weather_agent = BeeAIWeatherMonitorAgent()
+weather_result = await weather_agent.check_weather()
+
+# 2. If reroute required, analyze vendors
+if weather_result["status"] == "reroute_required":
+    auditor_agent = BeeAIAuditorAgent()
+    audit_result = await auditor_agent.analyze_vendors({
+        "vendors": weather_result["alternative_vendors"]
+    })
+    
+    # 3. Use approved vendor
+    approved_vendor = audit_result["approved_vendor_id"]
+```
+
+#### Pattern 2: Orchestrated Workflow
+```python
+# Orchestrator handles the complete workflow
+orchestrator = OrchestratorAgent(config=OrchestratorConfig(use_beeai=True))
+await orchestrator.initialize()
+
+# Run workflow
+result = await orchestrator.execute()
+# Returns: {weather_data, audit_results, recommendations}
+```
+
+### BeeAI Tool Development
+
+#### Creating a New Tool
+```python
+from bee_agent.tools.base import Tool
+
+class MyCustomTool(Tool):
+    def __init__(self):
+        super().__init__(
+            name="my_tool",
+            description="Tool description",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "param": {"type": "string"}
+                },
+                "required": ["param"]
+            }
+        )
+    
+    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        # Tool logic here
+        return {
+            "success": True,
+            "data": {...}
+        }
+```
+
+#### Adding Tool to Agent
+```python
+agent = BeeAgent(
+    name="MyAgent",
+    description="Agent description",
+    tools=[MyCustomTool(), OtherTool()],
+    system_prompt="Agent instructions..."
+)
+```
+
+### BeeAI Best Practices
+
+1. **Use Environment Variables**: Store API keys in `.env` files
+2. **Handle Errors Gracefully**: BeeAI provides built-in error handling
+3. **Close Resources**: Always call `agent.close()` when done
+4. **Monitor Logs**: Set `BEEAI_LOG_LEVEL=DEBUG` for detailed logging
+5. **Test Tools Independently**: Test each tool before integrating
+
+### BeeAI Troubleshooting
+
+#### Issue: "BeeAI framework not available"
+**Solution**: Install the framework
+```bash
+pip install bee-agent-framework
+```
+
+#### Issue: Type errors about BeeAI imports
+**Solution**: These are cosmetic if BeeAI is not installed. The code has fallback implementations.
+
+#### Issue: Agent timeout
+**Solution**: Increase timeout in configuration
+```python
+config = OrchestratorConfig(beeai_timeout=60)
+```
+
+### BeeAI Migration Status
+
+✅ **Complete** - All agents migrated to BeeAI framework
+- Monitor Agent: BeeAIWeatherMonitorAgent
+- Auditor Agent: BeeAIAuditorAgent  
+- Orchestrator: Enhanced with BeeAI support
+- Configuration: Feature flags added
+- Documentation: Comprehensive guides created
+
+**Migration Documents**:
+- `BEEAI_MIGRATION_PLAN.md` - Migration strategy
+- `BEEAI_MIGRATION_COMPLETE.md` - Implementation summary
+- `apps/backend/src/agents/monitor/BEEAI_WEATHER_AGENT.md` - Weather agent docs
+- `apps/backend/src/agents/auditor/BEEAI_AUDITOR.md` - Auditor agent docs
+
+### BeeAI Resources
+
+- [Bee AI Framework](https://github.com/i-am-bee/bee-agent-framework)
+- [IBM watsonx.ai](https://www.ibm.com/docs/en/watsonx-as-a-service)
+- [Example Scripts](apps/backend/examples/)
+
+---

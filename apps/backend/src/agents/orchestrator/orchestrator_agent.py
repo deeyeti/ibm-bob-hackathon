@@ -17,9 +17,9 @@ from datetime import datetime
 
 from ..base_agent import BaseAgent
 from ..monitor.monitor_agent import MonitorAgent
-from ..monitor.weather_monitor import BeeAIWeatherMonitorAgent
+from ..monitor.weather_monitor import BeeAIWeatherMonitorAgent, BEEAI_AVAILABLE as WEATHER_BEEAI_AVAILABLE
 from ..auditor.auditor_agent import AuditorAgent
-from ..auditor.beeai_auditor import BeeAIAuditorAgent
+from ..auditor.beeai_auditor import BeeAIAuditorAgent, analyze_alternative_vendors
 from .message_bus import (
     MessageBus, Message, MessageType, MessagePriority,
     get_message_bus, initialize_message_bus
@@ -57,9 +57,9 @@ class OrchestratorAgent(BaseAgent):
         self.config = config or get_config()
         self.message_bus: Optional[MessageBus] = None
         
-        # Child agents
-        self.monitor_agent: Optional[MonitorAgent] = None
-        self.auditor_agent: Optional[AuditorAgent] = None
+        # Child agents (support both legacy and BeeAI versions)
+        self.monitor_agent: Optional[Any] = None  # MonitorAgent or BeeAIWeatherMonitorAgent
+        self.auditor_agent: Optional[Any] = None  # AuditorAgent or BeeAIAuditorAgent
         
         # State tracking
         self.active_workflows: Dict[str, Dict[str, Any]] = {}
@@ -99,17 +99,27 @@ class OrchestratorAgent(BaseAgent):
             raise
     
     async def _initialize_child_agents(self):
-        """Initialize Monitor and Auditor agents"""
+        """Initialize Monitor and Auditor agents (Bee AI versions preferred)"""
         try:
-            # Initialize Monitor Agent
+            # Initialize Monitor Agent - Use Bee AI version if available
             logger.info("Initializing Monitor Agent...")
-            self.monitor_agent = MonitorAgent()
-            await self.monitor_agent.initialize()
+            if WEATHER_BEEAI_AVAILABLE and self.config.use_beeai:
+                logger.info("Using BeeAI Weather Monitor Agent")
+                self.monitor_agent = BeeAIWeatherMonitorAgent()
+            else:
+                logger.info("Using legacy Monitor Agent")
+                self.monitor_agent = MonitorAgent()
+                await self.monitor_agent.initialize()
             
-            # Initialize Auditor Agent
+            # Initialize Auditor Agent - Use Bee AI version if available
             logger.info("Initializing Auditor Agent...")
-            self.auditor_agent = AuditorAgent()
-            await self.auditor_agent.initialize()
+            if self.config.use_beeai:
+                logger.info("Using BeeAI Auditor Agent")
+                self.auditor_agent = BeeAIAuditorAgent()
+            else:
+                logger.info("Using legacy Auditor Agent")
+                self.auditor_agent = AuditorAgent()
+                await self.auditor_agent.initialize()
             
             logger.info("Child agents initialized successfully")
             
@@ -181,12 +191,13 @@ class OrchestratorAgent(BaseAgent):
             if needs_audit:
                 logger.info("Step 2: Weather conditions require audit...")
                 
-                # Step 3: Get affected vendors
-                affected_vendors = weather_data.get("affected_vendors", [])
+                # Step 3: Get vendors from weather data
+                # BeeAI agents return 'alternative_vendors', legacy returns 'affected_vendors'
+                vendors = weather_data.get("alternative_vendors") or weather_data.get("affected_vendors", [])
                 
                 # Step 4: Run audit
-                logger.info(f"Step 3: Running audit for {len(affected_vendors)} vendors...")
-                audit_results = await self._run_audit(affected_vendors)
+                logger.info(f"Step 3: Running audit for {len(vendors)} vendors...")
+                audit_results = await self._run_audit(vendors)
                 results["steps"].append({
                     "step": "audit",
                     "status": "completed",
@@ -218,13 +229,19 @@ class OrchestratorAgent(BaseAgent):
             }
     
     async def _check_weather(self) -> Dict[str, Any]:
-        """Check weather conditions using Monitor Agent"""
+        """Check weather conditions using Monitor Agent (BeeAI or legacy)"""
         try:
             if not self.monitor_agent:
                 raise RuntimeError("Monitor agent not initialized")
             
-            # Run monitor agent
-            weather_data = await self.monitor_agent.run()
+            # Check if using BeeAI agent
+            if isinstance(self.monitor_agent, BeeAIWeatherMonitorAgent):
+                # BeeAI agent returns dict directly
+                weather_data = await self.monitor_agent.run()
+            else:
+                # Legacy agent
+                weather_data = await self.monitor_agent.run()
+            
             self.last_weather_check = datetime.utcnow()
             
             return weather_data
@@ -233,20 +250,23 @@ class OrchestratorAgent(BaseAgent):
             logger.error(f"Error checking weather: {e}", exc_info=True)
             raise
     
-    async def _run_audit(self, vendor_ids: List[str]) -> Dict[str, Any]:
-        """Run audit using Auditor Agent"""
+    async def _run_audit(self, vendors: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Run audit using Auditor Agent (BeeAI or legacy)"""
         try:
             if not self.auditor_agent:
                 raise RuntimeError("Auditor agent not initialized")
             
-            # Prepare audit request
-            audit_request = {
-                "vendor_ids": vendor_ids,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-            
-            # Run auditor agent
-            audit_results = await self.auditor_agent.execute()
+            # Check if using BeeAI agent
+            if isinstance(self.auditor_agent, BeeAIAuditorAgent):
+                # BeeAI agent expects alternative_vendors payload
+                audit_payload = {
+                    "vendors": vendors,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                audit_results = await self.auditor_agent.analyze_vendors(audit_payload)
+            else:
+                # Legacy agent
+                audit_results = await self.auditor_agent.execute()
             
             return audit_results
             
@@ -256,6 +276,13 @@ class OrchestratorAgent(BaseAgent):
     
     def _should_trigger_audit(self, weather_data: Dict[str, Any]) -> bool:
         """Determine if an audit should be triggered based on weather data"""
+        # Check for BeeAI response format
+        status = weather_data.get("status")
+        if status == "reroute_required":
+            alternative_vendors = weather_data.get("alternative_vendors", [])
+            return len(alternative_vendors) > 0
+        
+        # Check for legacy response format
         alerts = weather_data.get("alerts", [])
         affected_vendors = weather_data.get("affected_vendors", [])
         
@@ -377,28 +404,36 @@ class OrchestratorAgent(BaseAgent):
             "last_audit": self.last_audit.isoformat() if self.last_audit else None
         }
     
-    async def trigger_manual_audit(self, vendor_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+    async def trigger_manual_audit(self, vendors: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """
         Manually trigger an audit
         
         Args:
-            vendor_ids: Optional list of vendor IDs to audit. If None, audits all vendors.
+            vendors: Optional list of vendor data to audit. If None, gets vendors from monitor agent.
             
         Returns:
             Audit results
         """
         try:
-            logger.info(f"Manual audit triggered for {len(vendor_ids) if vendor_ids else 'all'} vendors")
+            logger.info(f"Manual audit triggered for {len(vendors) if vendors else 'all'} vendors")
             
-            if vendor_ids is None:
+            if vendors is None:
                 # Get all vendors from monitor agent
                 if self.monitor_agent:
                     weather_data = await self.monitor_agent.run()
-                    vendor_ids = [v["id"] for v in weather_data.get("vendors", [])]
+                    # BeeAI agents return 'alternative_vendors', legacy returns 'vendors'
+                    vendors = weather_data.get("alternative_vendors") or weather_data.get("vendors", [])
                 else:
-                    vendor_ids = []
+                    vendors = []
             
-            results = await self._run_audit(vendor_ids)
+            if not vendors:
+                return {
+                    "status": "error",
+                    "error": "No vendors available for audit",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            
+            results = await self._run_audit(vendors)
             return results
             
         except Exception as e:
