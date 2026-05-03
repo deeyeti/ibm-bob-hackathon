@@ -38,6 +38,18 @@ async def chat(request: ChatRequest) -> ChatResponse:
     try:
         logger.info(f"Processing chat request: {request.message[:50]}...")
         
+        # Check if watsonx service is initialized
+        if not watsonx_service._initialized:
+            logger.warning("Watsonx service not initialized, attempting to initialize...")
+            try:
+                await watsonx_service.initialize()
+            except Exception as init_error:
+                logger.error(f"Failed to initialize watsonx service: {init_error}")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="AI Consultant is currently unavailable. Please ensure WATSONX_API_KEY and WATSONX_PROJECT_ID are configured correctly in your environment variables.",
+                )
+        
         # Build system prompt for Sustainable Logistics Expert
         system_prompt = """You are a Sustainable Logistics Expert specializing in 
 carbon emission reduction, route optimization, and fleet management. Your role is to:

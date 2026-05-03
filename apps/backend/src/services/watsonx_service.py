@@ -270,10 +270,10 @@ Format your response with:
 - Specific emission reduction strategies
 """
 
-            # Create a specific model instance for llama-3-3-70b-instruct
+            # Create a specific model instance using the configured model
             # This uses a supported model from the available watsonx models
             granite_model = ModelInference(
-                model_id="meta-llama/llama-3-3-70b-instruct",
+                model_id=settings.watsonx_model_id,
                 api_client=self.client,
                 project_id=settings.watsonx_project_id,
             )
@@ -294,7 +294,7 @@ Format your response with:
                 params=parameters
             )
             
-            logger.info("Route emissions calculation successful using ibm/granite-3-8b-instruct")
+            logger.info(f"Route emissions calculation successful using {settings.watsonx_model_id}")
             return response
 
         except Exception as e:

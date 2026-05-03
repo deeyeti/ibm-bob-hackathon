@@ -31,15 +31,28 @@ async def lifespan(app: FastAPI):
     logger.info(f"Environment: {settings.environment}")
     logger.info(f"Debug mode: {settings.debug}")
     
-    # Initialize services here
-    # await initialize_watsonx_service()
+    # Initialize watsonx service
+    from src.services.watsonx_service import watsonx_service
+    try:
+        await watsonx_service.initialize()
+        logger.info("✅ Watsonx service initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize watsonx service: {e}")
+        logger.warning("⚠️ AI Consultant will not be available without valid watsonx credentials")
+    
+    # Initialize agents if needed
     # await initialize_agents()
     
     yield
     
     # Shutdown
     logger.info("Shutting down application")
-    # Cleanup resources here
+    try:
+        await watsonx_service.close()
+        logger.info("Watsonx service closed")
+    except Exception as e:
+        logger.error(f"Error closing watsonx service: {e}")
+    # Cleanup other resources here
     # await cleanup_agents()
 
 

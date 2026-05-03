@@ -82,10 +82,10 @@ export default function Home() {
             <a href="https://github.com/deeyeti/ibm-bob-hackathon" className="font-mono text-sm hover:text-primary-600 transition-colors">
               GitHub
             </a>
-            <a href="#" className="font-mono text-sm hover:text-primary-600 transition-colors">
+            <a href="https://github.com/deeyeti/ibm-bob-hackathon/blob/master/README.md" className="font-mono text-sm hover:text-primary-600 transition-colors">
               Documentation
             </a>
-            <a href="#" className="font-mono text-sm hover:text-primary-600 transition-colors">
+            <a href="https://github.com/deeyeti/ibm-bob-hackathon/blob/master/apps/backend/README.md" className="font-mono text-sm hover:text-primary-600 transition-colors">
               API
             </a>
           </div>

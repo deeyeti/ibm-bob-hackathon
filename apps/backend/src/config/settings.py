@@ -46,7 +46,7 @@ class Settings(BaseSettings):
         description="watsonx.ai service URL",
     )
     watsonx_model_id: str = Field(
-        default="ibm/granite-13b-chat-v2",
+        default="meta-llama/llama-3-3-70b-instruct",
         description="Default model ID",
     )
 
