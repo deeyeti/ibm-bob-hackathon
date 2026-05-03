@@ -3,24 +3,35 @@ Orchestrator Agent
 
 This agent coordinates the Monitor and Auditor agents, managing the workflow
 of weather monitoring, vendor analysis, and emissions optimization.
+
+This file can be executed directly to run the complete workflow:
+    python -m src.agents.orchestrator.orchestrator_agent
 """
 
 import asyncio
 import logging
+import os
+import sys
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 from ..base_agent import BaseAgent
 from ..monitor.monitor_agent import MonitorAgent
+from ..monitor.weather_monitor import BeeAIWeatherMonitorAgent
 from ..auditor.auditor_agent import AuditorAgent
+from ..auditor.beeai_auditor import BeeAIAuditorAgent
 from .message_bus import (
     MessageBus, Message, MessageType, MessagePriority,
     get_message_bus, initialize_message_bus
 )
 from .config import OrchestratorConfig, get_config
+from src.utils.logger import get_logger
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OrchestratorAgent(BaseAgent):
@@ -440,5 +451,336 @@ async def shutdown_orchestrator():
     if _orchestrator:
         await _orchestrator.cleanup()
         _orchestrator = None
+
+# Made with Bob
+
+
+# ============================================================================
+# BeeAI-Based Orchestrator Workflow
+# ============================================================================
+
+
+def print_shift_order(
+    weather_response: Dict[str, Any],
+    audit_result: Dict[str, Any],
+    workflow_id: str,
+) -> None:
+    """
+    Print ESG-compliant Shift Order to console.
+    
+    Args:
+        weather_response: Response from WeatherMonitorAgent
+        audit_result: Response from AuditorAgent
+        workflow_id: Unique workflow identifier
+    """
+    timestamp = datetime.utcnow().isoformat()
+    
+    # Extract data
+    location = weather_response.get("location", "Unknown")
+    weather_reason = weather_response.get("reason", "Severe weather detected")
+    
+    approved_vendor_id = audit_result.get("approved_vendor_id", "N/A")
+    emissions_saving = audit_result.get("emissions_saving", "N/A")
+    justification = audit_result.get("justification", "No justification provided")
+    vendors_analyzed = audit_result.get("vendors_analyzed", 0)
+    
+    # Find approved vendor details from alternative_vendors
+    vendor_name = "Unknown Vendor"
+    fleet_type = "Unknown"
+    eco_rating = "N/A"
+    
+    alternative_vendors = weather_response.get("alternative_vendors", [])
+    for vendor in alternative_vendors:
+        if vendor.get("id") == approved_vendor_id:
+            vendor_name = vendor.get("name", "Unknown Vendor")
+            fleet_type = vendor.get("fleet_type", "Unknown")
+            eco_rating = vendor.get("eco_rating", "N/A")
+            break
+    
+    # Determine ESG compliance status
+    esg_compliant = fleet_type.lower() in ["hydrogen", "electric"]
+    esg_status = "✓ Zero-emission fleet" if esg_compliant else "○ Low-emission fleet"
+    
+    # Print formatted shift order
+    print("\n" + "═" * 70)
+    print(" " * 18 + "ESG-COMPLIANT SHIFT ORDER")
+    print("═" * 70)
+    print(f"Order ID: {workflow_id}")
+    print(f"Timestamp: {timestamp}")
+    print(f"Status: APPROVED")
+    print()
+    
+    print("WEATHER ALERT")
+    print("─" * 70)
+    print(f"Location: {location}")
+    print(f"Severity: HIGH")
+    print(f"Reason: {weather_reason}")
+    print()
+    
+    print("APPROVED VENDOR")
+    print("─" * 70)
+    print(f"Vendor ID: {approved_vendor_id}")
+    print(f"Vendor Name: {vendor_name}")
+    print(f"Fleet Type: {fleet_type.capitalize()}")
+    print(f"Eco Rating: {eco_rating}/5.0")
+    print()
+    
+    print("EMISSIONS IMPACT")
+    print("─" * 70)
+    print(f"Emissions Saving: {emissions_saving}")
+    print(f"Vendors Analyzed: {vendors_analyzed}")
+    print(f"ESG Compliance: {esg_status}")
+    print()
+    
+    print("JUSTIFICATION")
+    print("─" * 70)
+    # Wrap justification text to 70 characters
+    words = justification.split()
+    line = ""
+    for word in words:
+        if len(line) + len(word) + 1 <= 70:
+            line += word + " "
+        else:
+            print(line.strip())
+            line = word + " "
+    if line:
+        print(line.strip())
+    print()
+    
+    print("═" * 70)
+    print()
+
+
+async def run_beeai_orchestrator_workflow(
+    target_location: Optional[str] = None,
+    openweather_api_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Run the complete BeeAI-based orchestrator workflow.
+    
+    This workflow:
+    1. Runs WeatherMonitorAgent to check weather conditions
+    2. If status is 'reroute_required', extracts alternative_vendors
+    3. Passes alternative_vendors to AuditorAgent for analysis
+    4. Prints ESG-compliant Shift Order to console
+    
+    Args:
+        target_location: Location to monitor (defaults to env var)
+        openweather_api_key: OpenWeather API key (defaults to env var)
+        
+    Returns:
+        Dictionary with workflow results
+    """
+    workflow_id = f"SHIFT-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
+    
+    logger.info(f"Starting BeeAI Orchestrator Workflow: {workflow_id}")
+    print(f"\n🚀 Starting Orchestrator Workflow: {workflow_id}\n")
+    
+    try:
+        # ====================================================================
+        # STEP 1: Initialize and Run WeatherMonitorAgent
+        # ====================================================================
+        print("📡 Step 1: Checking weather conditions...")
+        logger.info("Initializing WeatherMonitorAgent")
+        
+        weather_agent = BeeAIWeatherMonitorAgent(
+            target_location=target_location or os.getenv('TARGET_LOCATION', 'New York,US'),
+            api_key=openweather_api_key or os.getenv('OPENWEATHER_API_KEY'),
+        )
+        
+        # Run weather check
+        weather_response = await weather_agent.check_weather()
+        
+        # Convert Pydantic model to dict
+        if hasattr(weather_response, 'model_dump'):
+            weather_dict = weather_response.model_dump()
+        elif hasattr(weather_response, 'dict'):
+            weather_dict = weather_response.dict()
+        else:
+            weather_dict = dict(weather_response) if isinstance(weather_response, dict) else {}
+        
+        logger.info(f"Weather check complete: status={weather_dict.get('status')}")
+        print(f"   Status: {weather_dict.get('status')}")
+        
+        # ====================================================================
+        # STEP 2: Check if Reroute is Required
+        # ====================================================================
+        if weather_dict.get("status") != "reroute_required":
+            print("\n✅ Weather conditions are clear. No reroute required.")
+            logger.info("Workflow complete: No reroute needed")
+            
+            # Close weather agent
+            await weather_agent.close()
+            
+            return {
+                "workflow_id": workflow_id,
+                "status": "completed",
+                "reroute_required": False,
+                "weather_status": weather_dict.get("status"),
+                "weather_condition": weather_dict.get("weather"),
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        
+        # ====================================================================
+        # STEP 3: Extract Alternative Vendors
+        # ====================================================================
+        print("\n⚠️  Severe weather detected! Reroute required.")
+        print(f"   Reason: {weather_dict.get('reason')}")
+        
+        alternative_vendors = weather_dict.get("alternative_vendors", [])
+        
+        if not alternative_vendors:
+            logger.error("No alternative vendors available")
+            print("\n❌ Error: No alternative vendors available for reroute")
+            await weather_agent.close()
+            return {
+                "workflow_id": workflow_id,
+                "status": "error",
+                "error": "No alternative vendors available",
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        
+        print(f"\n📦 Step 2: Found {len(alternative_vendors)} alternative vendors")
+        logger.info(f"Extracted {len(alternative_vendors)} alternative vendors")
+        
+        # ====================================================================
+        # STEP 4: Initialize and Run AuditorAgent
+        # ====================================================================
+        print("\n🔍 Step 3: Analyzing vendors for emissions optimization...")
+        logger.info("Initializing BeeAIAuditorAgent")
+        
+        auditor_agent = BeeAIAuditorAgent()
+        
+        # Prepare vendor payload
+        vendor_payload = {
+            "vendors": alternative_vendors,
+            "location": target_location or os.getenv('TARGET_LOCATION', 'New York,US'),
+        }
+        
+        # Run vendor analysis
+        audit_result = await auditor_agent.analyze_vendors(vendor_payload)
+        
+        logger.info(f"Audit complete: approved_vendor={audit_result.get('approved_vendor_id')}")
+        print(f"   Approved Vendor: {audit_result.get('approved_vendor_id')}")
+        print(f"   Emissions Saving: {audit_result.get('emissions_saving')}")
+        
+        # ====================================================================
+        # STEP 5: Print ESG-Compliant Shift Order
+        # ====================================================================
+        print("\n📋 Step 4: Generating ESG-Compliant Shift Order...")
+        
+        # Add location to weather response for shift order
+        weather_dict["location"] = target_location or os.getenv('TARGET_LOCATION', 'New York,US')
+        
+        print_shift_order(
+            weather_response=weather_dict,
+            audit_result=audit_result,
+            workflow_id=workflow_id,
+        )
+        
+        # ====================================================================
+        # STEP 6: Cleanup and Return Results
+        # ====================================================================
+        logger.info("Workflow complete: Shift order generated")
+        print("✅ Workflow completed successfully!\n")
+        
+        # Close agents
+        await weather_agent.close()
+        await auditor_agent.close()
+        
+        return {
+            "workflow_id": workflow_id,
+            "status": "completed",
+            "reroute_required": True,
+            "weather_response": weather_dict,
+            "audit_result": audit_result,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in orchestrator workflow: {e}", exc_info=True)
+        print(f"\n❌ Error: {str(e)}\n")
+        return {
+            "workflow_id": workflow_id,
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+
+# ============================================================================
+# Main Execution Block
+# ============================================================================
+
+
+async def main():
+    """Main entry point for running the orchestrator workflow."""
+    print("\n" + "=" * 70)
+    print(" " * 15 + "ECO-SHIFT ORCHESTRATOR AGENT")
+    print("=" * 70)
+    print("\nBeeAI-based workflow for weather monitoring and vendor optimization")
+    print("Integrates WeatherMonitorAgent → AuditorAgent → Shift Order\n")
+    
+    # Check environment variables
+    openweather_key = os.getenv('OPENWEATHER_API_KEY')
+    watsonx_key = os.getenv('WATSONX_API_KEY')
+    watsonx_project = os.getenv('WATSONX_PROJECT_ID')
+    target_location = os.getenv('TARGET_LOCATION', 'New York,US')
+    
+    if not openweather_key:
+        print("❌ Error: OPENWEATHER_API_KEY environment variable not set")
+        print("   Please set it in your .env file\n")
+        sys.exit(1)
+    
+    if not watsonx_key or not watsonx_project:
+        print("⚠️  Warning: WATSONX_API_KEY or WATSONX_PROJECT_ID not set")
+        print("   Auditor agent may not function properly\n")
+    
+    print(f"📍 Target Location: {target_location}")
+    print(f"🔑 OpenWeather API: {'✓ Configured' if openweather_key else '✗ Missing'}")
+    print(f"🔑 Watsonx API: {'✓ Configured' if watsonx_key else '✗ Missing'}")
+    print()
+    
+    # Run workflow
+    result = await run_beeai_orchestrator_workflow(
+        target_location=target_location,
+        openweather_api_key=openweather_key,
+    )
+    
+    # Print summary
+    print("\n" + "=" * 70)
+    print(" " * 22 + "WORKFLOW SUMMARY")
+    print("=" * 70)
+    print(f"Workflow ID: {result.get('workflow_id')}")
+    status = result.get('status', 'unknown')
+    print(f"Status: {status.upper() if status else 'UNKNOWN'}")
+    print(f"Reroute Required: {'Yes' if result.get('reroute_required') else 'No'}")
+    print(f"Timestamp: {result.get('timestamp')}")
+    
+    if result.get('status') == 'error':
+        print(f"Error: {result.get('error')}")
+    
+    print("=" * 70 + "\n")
+
+
+if __name__ == "__main__":
+    """
+    Run the orchestrator workflow directly from command line:
+    
+    Usage:
+        python -m src.agents.orchestrator.orchestrator_agent
+        
+    Or from the backend directory:
+        cd apps/backend
+        python -m src.agents.orchestrator.orchestrator_agent
+        
+    Environment Variables:
+        TARGET_LOCATION: Location to monitor (default: "New York,US")
+        OPENWEATHER_API_KEY: OpenWeather API key (required)
+        WATSONX_API_KEY: IBM watsonx API key (required)
+        WATSONX_PROJECT_ID: IBM watsonx project ID (required)
+    """
+    asyncio.run(main())
+
 
 # Made with Bob
