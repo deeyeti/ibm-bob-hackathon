@@ -242,6 +242,21 @@ export const fleetsAPI = {
 }
 
 /**
+ * Orchestrator API
+ */
+export const orchestratorAPI = {
+  /**
+   * Trigger orchestration workflow
+   */
+  orchestrate: async (targetLocation: string) => {
+    const response = await apiClient.post('/api/orchestrate', {
+      target_location: targetLocation,
+    })
+    return response.data
+  },
+}
+
+/**
  * Health Check API
  */
 export const healthAPI = {

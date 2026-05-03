@@ -272,4 +272,32 @@ export interface AsyncState<T> {
   error: string | null
 }
 
+// ============================================================================
+// Orchestrator Types
+// ============================================================================
+
+export interface OrchestratorRequest {
+  target_location: string
+}
+
+export interface OrchestratorResponse {
+  workflow_id: string
+  status: 'completed' | 'error'
+  reroute_required: boolean
+  approved_vendor_id?: string
+  emissions_saving?: string
+  justification?: string
+  weather_status?: string
+  timestamp: string
+  error?: string
+}
+
+export interface AgentLog {
+  id: string
+  timestamp: string
+  agent: 'monitor' | 'auditor' | 'orchestrator'
+  level: 'info' | 'warning' | 'error' | 'success'
+  message: string
+}
+
 // Made with Bob
