@@ -4,6 +4,8 @@
 
 Eco-Shift is an intelligent multi-agent platform that leverages IBM watsonx.ai, the IBM Bee AI framework, and real-time weather data to optimize logistics operations, reduce carbon emissions, and promote sustainable supply chain practices.
 
+Deployment ready on IBM cloud.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Node.js 18+](https://img.shields.io/badge/node-18+-green.svg)](https://nodejs.org/)
