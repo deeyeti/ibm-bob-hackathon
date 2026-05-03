@@ -4,6 +4,9 @@ import { useState, useEffect, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { orchestratorAPI, chatAPI } from '@/lib/api'
 import { OrchestratorResponse, AgentLog, ChatMessage } from '@/types'
+import { Port, getPortById } from '@/data/world-ports'
+import { ShippingRoute, getRoutesBetweenPorts, calculateDistance, RouteWaypoint } from '@/data/shipping-routes'
+import { PortSelector } from '@/components/ui/PortSelector'
 import gsap from 'gsap'
 import 'leaflet/dist/leaflet.css'
 
@@ -18,6 +21,14 @@ const TileLayer = dynamic(
 )
 const Marker = dynamic(
   () => import('react-leaflet').then((mod) => mod.Marker),
+  { ssr: false }
+)
+const Circle = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Circle),
+  { ssr: false }
+)
+const Popup = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Popup),
   { ssr: false }
 )
 
@@ -69,14 +80,62 @@ interface CommandCenterProps {
   onBack?: () => void
 }
 
+// Fleet type definitions with emission factors (kg CO2e per nautical mile)
+const FLEET_TYPES = {
+  diesel: { name: 'Diesel', factor: 0.0158, color: '#ef4444' },
+  hybrid: { name: 'Hybrid', factor: 0.0079, color: '#f59e0b' },
+  electric: { name: 'Electric', factor: 0.0, color: '#10b981' },
+  hydrogen: { name: 'Hydrogen', factor: 0.0, color: '#06b6d4' },
+} as const
+
+type FleetType = keyof typeof FLEET_TYPES
+
+interface RouteOption {
+  id: string
+  name: string
+  waypoints: RouteWaypoint[]
+  distanceNm: number
+  transitDays: number
+  type: 'primary' | 'alternative' | 'eco'
+  color: string
+}
+
+interface EmissionsData {
+  fleetType: FleetType
+  distanceNm: number
+  emissionsKg: number
+  emissionsPerNm: number
+  baselineEmissionsKg: number
+  savingsKg: number
+  savingsPercent: number
+}
+
 export default function CommandCenter({ onBack }: CommandCenterProps) {
-  // Logistics state
-  const [originPort, setOriginPort] = useState('Shanghai,CN')
-  const [destinationPort, setDestinationPort] = useState('Los Angeles,US')
+  // Logistics state - now using Port objects
+  const [originPort, setOriginPort] = useState<Port | null>(getPortById('CNSHA') || null) // Shanghai
+  const [destinationPort, setDestinationPort] = useState<Port | null>(getPortById('USLAX') || null) // Los Angeles
+  const [selectedRoute, setSelectedRoute] = useState<ShippingRoute | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [shiftOrder, setShiftOrder] = useState<OrchestratorResponse | null>(null)
   const [agentLogs, setAgentLogs] = useState<AgentLog[]>([])
   const [error, setError] = useState<string | null>(null)
+  
+  // Storm simulation state
+  const [stormSimulationEnabled, setStormSimulationEnabled] = useState(false)
+  const [stormLocation, setStormLocation] = useState<{ lat: number; lng: number } | null>(null)
+  
+  // Route comparison state
+  const [routeOptions, setRouteOptions] = useState<RouteOption[]>([])
+  const [selectedFleetType, setSelectedFleetType] = useState<FleetType>('diesel')
+  const [emissionsComparison, setEmissionsComparison] = useState<EmissionsData[]>([])
+  
+  // Route details state
+  const [routeDetails, setRouteDetails] = useState<{
+    distanceNm: number
+    distanceKm: number
+    transitDays: number
+    transitHours: number
+  } | null>(null)
   
   // Chat state
   const [isChatOpen, setIsChatOpen] = useState(false)
@@ -110,6 +169,181 @@ export default function CommandCenter({ onBack }: CommandCenterProps) {
     }
   }, [shiftOrder])
 
+  // Update selected route when ports change
+  useEffect(() => {
+    if (originPort && destinationPort) {
+      const routes = getRoutesBetweenPorts(originPort.id, destinationPort.id)
+      if (routes.length > 0) {
+        setSelectedRoute(routes[0])
+      } else {
+        // Create a simple direct route if no predefined route exists
+        const distance = calculateDistance(
+          originPort.coordinates.lat,
+          originPort.coordinates.lng,
+          destinationPort.coordinates.lat,
+          destinationPort.coordinates.lng
+        )
+        setSelectedRoute({
+          id: `${originPort.id}-${destinationPort.id}`,
+          name: `${originPort.city} to ${destinationPort.city}`,
+          description: 'Direct route',
+          originPortId: originPort.id,
+          destinationPortId: destinationPort.id,
+          waypoints: [
+            { lat: originPort.coordinates.lat, lng: originPort.coordinates.lng, name: originPort.name },
+            { lat: destinationPort.coordinates.lat, lng: destinationPort.coordinates.lng, name: destinationPort.name },
+          ],
+          distanceNm: Math.round(distance),
+          typicalTransitDays: Math.ceil(distance / 400), // Assuming ~400 nm per day
+          type: 'container',
+        })
+      }
+    } else {
+      setSelectedRoute(null)
+    }
+  }, [originPort, destinationPort])
+
+  // Calculate emissions for a route with a specific fleet type
+  const calculateEmissions = (distanceNm: number, fleetType: FleetType): EmissionsData => {
+    const emissionFactor = FLEET_TYPES[fleetType].factor
+    const emissionsKg = distanceNm * emissionFactor
+    const emissionsPerNm = emissionFactor
+    
+    // Baseline is always diesel
+    const baselineEmissionsKg = distanceNm * FLEET_TYPES.diesel.factor
+    const savingsKg = baselineEmissionsKg - emissionsKg
+    const savingsPercent = baselineEmissionsKg > 0 ? (savingsKg / baselineEmissionsKg) * 100 : 0
+    
+    return {
+      fleetType,
+      distanceNm,
+      emissionsKg: Math.round(emissionsKg * 100) / 100,
+      emissionsPerNm: Math.round(emissionsPerNm * 10000) / 10000,
+      baselineEmissionsKg: Math.round(baselineEmissionsKg * 100) / 100,
+      savingsKg: Math.round(savingsKg * 100) / 100,
+      savingsPercent: Math.round(savingsPercent * 100) / 100,
+    }
+  }
+
+  // Calculate route details (distance and transit time)
+  const calculateRouteDetails = (route: ShippingRoute | null) => {
+    if (!route) {
+      setRouteDetails(null)
+      return
+    }
+
+    const distanceNm = route.distanceNm
+    const distanceKm = distanceNm * 1.852 // Convert NM to km
+    
+    // Calculate transit time based on average ship speed (20 knots)
+    const averageSpeedKnots = 20
+    const transitHours = distanceNm / averageSpeedKnots
+    const transitDays = Math.floor(transitHours / 24)
+    const remainingHours = Math.round(transitHours % 24)
+
+    setRouteDetails({
+      distanceNm,
+      distanceKm: Math.round(distanceKm),
+      transitDays,
+      transitHours: remainingHours,
+    })
+  }
+
+  // Generate alternative routes when storm is simulated
+  const generateAlternativeRoutes = (primary: ShippingRoute, stormLat: number, stormLng: number): RouteOption[] => {
+    const routes: RouteOption[] = []
+    
+    // Primary route (original)
+    routes.push({
+      id: 'primary',
+      name: 'Primary Route',
+      waypoints: primary.waypoints,
+      distanceNm: primary.distanceNm,
+      transitDays: primary.typicalTransitDays,
+      type: 'primary',
+      color: '#3b82f6', // blue
+    })
+    
+    // Alternative route (storm avoidance) - route around storm
+    const altWaypoints = [...primary.waypoints]
+    const midIndex = Math.floor(altWaypoints.length / 2)
+    
+    // Insert detour waypoints around storm
+    const detourOffset = 15 // degrees offset
+    altWaypoints.splice(midIndex, 0,
+      { lat: stormLat + detourOffset, lng: stormLng - detourOffset, name: 'Detour Point 1' },
+      { lat: stormLat + detourOffset, lng: stormLng + detourOffset, name: 'Detour Point 2' }
+    )
+    
+    // Calculate new distance (approximately 20% longer)
+    const altDistance = Math.round(primary.distanceNm * 1.2)
+    
+    routes.push({
+      id: 'alternative',
+      name: 'Storm Avoidance Route',
+      waypoints: altWaypoints,
+      distanceNm: altDistance,
+      transitDays: Math.ceil(primary.typicalTransitDays * 1.15),
+      type: 'alternative',
+      color: '#f59e0b', // amber
+    })
+    
+    // Eco-friendly route (optimized for emissions)
+    const ecoWaypoints = [...primary.waypoints]
+    const ecoDistance = Math.round(primary.distanceNm * 1.05) // Slightly longer but more efficient
+    
+    routes.push({
+      id: 'eco',
+      name: 'Eco-Optimized Route',
+      waypoints: ecoWaypoints,
+      distanceNm: ecoDistance,
+      transitDays: Math.ceil(primary.typicalTransitDays * 1.1),
+      type: 'eco',
+      color: '#10b981', // green
+    })
+    
+    return routes
+  }
+
+  // Update emissions comparison when fleet type or routes change
+  useEffect(() => {
+    if (routeOptions.length > 0) {
+      const emissions = routeOptions.map(route =>
+        calculateEmissions(route.distanceNm, selectedFleetType)
+      )
+      setEmissionsComparison(emissions)
+    }
+  }, [routeOptions, selectedFleetType])
+
+  // Update route details when selected route changes
+  useEffect(() => {
+    calculateRouteDetails(selectedRoute)
+  }, [selectedRoute])
+
+  // Handle storm simulation toggle
+  const handleStormToggle = () => {
+    const newState = !stormSimulationEnabled
+    setStormSimulationEnabled(newState)
+    
+    if (newState && selectedRoute) {
+      // Place storm at midpoint of route
+      const midIndex = Math.floor(selectedRoute.waypoints.length / 2)
+      const midWaypoint = selectedRoute.waypoints[midIndex]
+      setStormLocation({ lat: midWaypoint.lat, lng: midWaypoint.lng })
+      
+      // Generate alternative routes
+      const alternatives = generateAlternativeRoutes(selectedRoute, midWaypoint.lat, midWaypoint.lng)
+      setRouteOptions(alternatives)
+      
+      addLog('monitor', 'warning', 'Storm simulation activated - generating alternative routes')
+    } else {
+      setStormLocation(null)
+      setRouteOptions([])
+      setEmissionsComparison([])
+      addLog('monitor', 'info', 'Storm simulation deactivated')
+    }
+  }
+
   const addLog = (agent: 'monitor' | 'auditor' | 'orchestrator', level: AgentLog['level'], message: string) => {
     const log: AgentLog = {
       id: `${Date.now()}-${Math.random()}`,
@@ -122,8 +356,8 @@ export default function CommandCenter({ onBack }: CommandCenterProps) {
   }
 
   const handleOrchestrate = async () => {
-    if (!originPort.trim() || !destinationPort.trim()) {
-      setError('Please enter both origin and destination ports')
+    if (!originPort || !destinationPort) {
+      setError('Please select both origin and destination ports')
       return
     }
 
@@ -133,7 +367,10 @@ export default function CommandCenter({ onBack }: CommandCenterProps) {
     setAgentLogs([])
 
     try {
-      addLog('orchestrator', 'info', `Starting orchestration workflow: ${originPort} → ${destinationPort}`)
+      const originStr = `${originPort.city},${originPort.country}`
+      const destStr = `${destinationPort.city},${destinationPort.country}`
+      
+      addLog('orchestrator', 'info', `Starting orchestration workflow: ${originPort.name} → ${destinationPort.name}`)
       addLog('monitor', 'info', 'Initializing Weather Monitor Agent...')
       
       await new Promise(resolve => setTimeout(resolve, 500))
@@ -146,7 +383,7 @@ export default function CommandCenter({ onBack }: CommandCenterProps) {
       addLog('orchestrator', 'info', 'Awaiting watsonx API resolution...')
       
       // Call the orchestrator API with origin and destination
-      const response = await orchestratorAPI.orchestrate(originPort, destinationPort)
+      const response = await orchestratorAPI.orchestrate(originStr, destStr)
       
       if (response.status === 'error') {
         throw new Error(response.error || 'Orchestration failed')
@@ -237,36 +474,39 @@ export default function CommandCenter({ onBack }: CommandCenterProps) {
     }
   }
 
-  // Get coordinates for map (mock data for now, will come from API)
-  const getRouteCoordinates = () => {
-    if (shiftOrder?.route_details?.origin_coords && shiftOrder?.route_details?.destination_coords) {
-      return {
-        origin: shiftOrder.route_details.origin_coords,
-        destination: shiftOrder.route_details.destination_coords,
-      }
+  // Get route waypoints for map display
+  const getRouteWaypoints = () => {
+    if (selectedRoute) {
+      return selectedRoute.waypoints.map(wp => [wp.lat, wp.lng] as [number, number])
     }
-    // Default mock coordinates
-    return {
-      origin: [31.2304, 121.4737] as [number, number], // Shanghai
-      destination: [34.0522, -118.2437] as [number, number], // Los Angeles
-    }
+    return []
   }
 
-  const routeCoords = getRouteCoordinates()
+  const routeWaypoints = getRouteWaypoints()
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white">
       {/* Header */}
       <header className="border-b-4 border-white bg-neutral-900">
         <div className="container-brutal py-6">
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="mb-4 bg-white text-neutral-950 border-3 border-white px-4 py-2 font-black text-sm uppercase hover:bg-yellow-400 hover:border-yellow-400 transition-all hover:translate-x-[-2px] hover:translate-y-[-2px] shadow-[4px_4px_0px_0px_rgba(255,255,255,0.3)]"
+          <div className="flex flex-wrap gap-3 mb-4">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="bg-white text-neutral-950 border-3 border-white px-4 py-2 font-black text-sm uppercase hover:bg-yellow-400 hover:border-yellow-400 transition-all hover:translate-x-[-2px] hover:translate-y-[-2px] shadow-[4px_4px_0px_0px_rgba(255,255,255,0.3)]"
+              >
+                ← BACK TO HOME
+              </button>
+            )}
+            <a
+              href="https://github.com/deeyeti/ibm-bob-hackathon"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-white text-neutral-950 border-3 border-white px-4 py-2 font-black text-sm uppercase hover:bg-green-400 hover:border-green-400 transition-all hover:translate-x-[-2px] hover:translate-y-[-2px] shadow-[4px_4px_0px_0px_rgba(255,255,255,0.3)] inline-block"
             >
-              ← BACK TO HOME
-            </button>
-          )}
+              📚 VIEW DOCUMENTATION
+            </a>
+          </div>
           <h1 className="text-4xl md:text-5xl font-black tracking-tight uppercase">
             ECO-SHIFT COMMAND CENTER
           </h1>
@@ -289,31 +529,83 @@ export default function CommandCenter({ onBack }: CommandCenterProps) {
               
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-mono font-bold mb-2 text-neutral-400">
-                      ORIGIN PORT
-                    </label>
-                    <input
-                      type="text"
-                      value={originPort}
-                      onChange={(e) => setOriginPort(e.target.value)}
-                      placeholder="e.g., Shanghai,CN"
-                      className="w-full bg-neutral-950 border-3 border-white px-4 py-3 font-mono text-lg focus:outline-none focus:border-green-400 transition-colors"
-                      disabled={isLoading}
-                    />
+                  <PortSelector
+                    label="ORIGIN PORT"
+                    value={originPort}
+                    onChange={setOriginPort}
+                    placeholder="Search for origin port..."
+                    className=""
+                  />
+                  <PortSelector
+                    label="DESTINATION PORT"
+                    value={destinationPort}
+                    onChange={setDestinationPort}
+                    placeholder="Search for destination port..."
+                    className=""
+                  />
+                </div>
+
+                {/* Route Info Display */}
+                {selectedRoute && originPort && destinationPort && (
+                  <div className="bg-neutral-950 border-2 border-neutral-700 p-4">
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div>
+                        <p className="text-xs font-mono text-neutral-500 mb-1">DISTANCE</p>
+                        <p className="font-bold text-lg text-white">{selectedRoute.distanceNm.toLocaleString()} NM</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-mono text-neutral-500 mb-1">TRANSIT TIME</p>
+                        <p className="font-bold text-lg text-white">{selectedRoute.typicalTransitDays} days</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-mono text-neutral-500 mb-1">ROUTE TYPE</p>
+                        <p className="font-bold text-lg text-white uppercase">{selectedRoute.type}</p>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-mono font-bold mb-2 text-neutral-400">
-                      DESTINATION PORT
-                    </label>
-                    <input
-                      type="text"
-                      value={destinationPort}
-                      onChange={(e) => setDestinationPort(e.target.value)}
-                      placeholder="e.g., Los Angeles,US"
-                      className="w-full bg-neutral-950 border-3 border-white px-4 py-3 font-mono text-lg focus:outline-none focus:border-green-400 transition-colors"
-                      disabled={isLoading}
-                    />
+                )}
+
+                {/* Fleet Type Selector */}
+                <div className="bg-neutral-950 border-2 border-neutral-700 p-4">
+                  <p className="text-xs font-mono text-neutral-500 mb-2">FLEET TYPE</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(Object.keys(FLEET_TYPES) as FleetType[]).map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => setSelectedFleetType(type)}
+                        className={`px-3 py-2 font-bold text-sm uppercase border-2 transition-all ${
+                          selectedFleetType === type
+                            ? 'text-neutral-950 border-white'
+                            : 'bg-neutral-900 text-white border-neutral-700 hover:border-white'
+                        }`}
+                        style={{
+                          backgroundColor: selectedFleetType === type ? FLEET_TYPES[type].color : undefined,
+                        }}
+                      >
+                        {FLEET_TYPES[type].name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Storm Simulation Toggle */}
+                <div className="bg-neutral-950 border-2 border-neutral-700 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-mono text-neutral-500 mb-1">STORM SIMULATION</p>
+                      <p className="text-xs text-neutral-400">Test rerouting capabilities</p>
+                    </div>
+                    <button
+                      onClick={handleStormToggle}
+                      disabled={!selectedRoute}
+                      className={`px-4 py-2 font-black text-sm uppercase border-2 transition-all ${
+                        stormSimulationEnabled
+                          ? 'bg-red-500 text-white border-red-500'
+                          : 'bg-neutral-900 text-white border-neutral-700 hover:border-red-500'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {stormSimulationEnabled ? '⚠ ACTIVE' : 'ACTIVATE'}
+                    </button>
                   </div>
                 </div>
 
@@ -364,6 +656,145 @@ export default function CommandCenter({ onBack }: CommandCenterProps) {
                   </div>
                 )}
               </div>
+
+            {/* Route Comparison Panel */}
+            {routeOptions.length > 0 && (
+              <div className="border-4 border-green-400 bg-neutral-900 p-6">
+                <h2 className="text-2xl font-black uppercase mb-4 text-green-400">
+                  ROUTE COMPARISON
+                </h2>
+                
+                <div className="space-y-4">
+                  {routeOptions.map((route, index) => {
+                    const emissions = emissionsComparison[index]
+                    const isBest = emissions && emissions.emissionsKg === Math.min(...emissionsComparison.map(e => e.emissionsKg))
+                    
+                    return (
+                      <div 
+                        key={route.id}
+                        className={`bg-neutral-950 border-2 p-4 ${
+                          isBest ? 'border-green-400' : 'border-neutral-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <div 
+                              className="w-4 h-4 rounded-full"
+                              style={{ backgroundColor: route.color }}
+                            />
+                            <h3 className="font-black text-lg uppercase">{route.name}</h3>
+                            {isBest && (
+                              <span className="bg-green-400 text-neutral-950 px-2 py-1 text-xs font-black uppercase">
+                                BEST ECO
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <p className="text-neutral-500 text-xs mb-1">DISTANCE</p>
+                            <p className="font-bold text-white">{route.distanceNm.toLocaleString()} NM</p>
+                          </div>
+                          <div>
+                            <p className="text-neutral-500 text-xs mb-1">TRANSIT</p>
+                            <p className="font-bold text-white">{route.transitDays} days</p>
+                          </div>
+                          {emissions && (
+                            <>
+                              <div>
+                                <p className="text-neutral-500 text-xs mb-1">EMISSIONS</p>
+                                <p className="font-bold text-white">{emissions.emissionsKg.toLocaleString()} kg CO2e</p>
+                              </div>
+                              <div>
+                                <p className="text-neutral-500 text-xs mb-1">SAVINGS</p>
+                                <p className={`font-bold ${emissions.savingsPercent > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {emissions.savingsPercent > 0 ? '-' : '+'}{Math.abs(emissions.savingsPercent).toFixed(1)}%
+                                </p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Emissions Comparison Visualization */}
+            {emissionsComparison.length > 0 && (
+              <div className="border-4 border-white bg-neutral-900 p-6">
+                <h2 className="text-2xl font-black uppercase mb-4">
+                  EMISSIONS ANALYSIS
+                </h2>
+                
+                <div className="space-y-4">
+                  {/* Fleet Type Info */}
+                  <div className="bg-neutral-950 border-2 border-neutral-700 p-4">
+                    <p className="text-xs font-mono text-neutral-500 mb-2">SELECTED FLEET</p>
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="w-6 h-6 rounded"
+                        style={{ backgroundColor: FLEET_TYPES[selectedFleetType].color }}
+                      />
+                      <p className="font-black text-xl uppercase">{FLEET_TYPES[selectedFleetType].name}</p>
+                    </div>
+                  </div>
+
+                  {/* Emissions Bar Chart */}
+                  <div className="bg-neutral-950 border-2 border-neutral-700 p-4">
+                    <p className="text-xs font-mono text-neutral-500 mb-3">EMISSIONS COMPARISON (kg CO2e)</p>
+                    <div className="space-y-3">
+                      {emissionsComparison.map((emission, index) => {
+                        const route = routeOptions[index]
+                        const maxEmissions = Math.max(...emissionsComparison.map(e => e.emissionsKg))
+                        const barWidth = (emission.emissionsKg / maxEmissions) * 100
+                        
+                        return (
+                          <div key={route.id}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-mono text-neutral-400">{route.name}</span>
+                              <span className="text-xs font-bold text-white">{emission.emissionsKg.toLocaleString()} kg</span>
+                            </div>
+                            <div className="w-full bg-neutral-800 h-6 relative">
+                              <div 
+                                className="h-full transition-all duration-500"
+                                style={{ 
+                                  width: `${barWidth}%`,
+                                  backgroundColor: route.color
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Total Savings */}
+                  {emissionsComparison.length > 1 && (
+                    <div className="bg-green-950 border-2 border-green-400 p-4">
+                      <p className="text-xs font-mono text-green-400 mb-2">POTENTIAL SAVINGS</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs text-neutral-400 mb-1">Best Route Emissions</p>
+                          <p className="font-black text-2xl text-white">
+                            {Math.min(...emissionsComparison.map(e => e.emissionsKg)).toLocaleString()} kg
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-neutral-400 mb-1">vs Diesel Baseline</p>
+                          <p className="font-black text-2xl text-green-400">
+                            -{Math.max(...emissionsComparison.map(e => e.savingsPercent)).toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             </div>
           </div>
 
@@ -415,17 +846,35 @@ export default function CommandCenter({ onBack }: CommandCenterProps) {
                   ℹ NO REROUTE REQUIRED
                 </h2>
                 <p className="text-neutral-300">
-                  Weather conditions are clear. Current routes are optimal.
+                  {shiftOrder.weather_status || 'Weather conditions are clear. Current routes are optimal.'}
                 </p>
                 <div className="mt-4 border-t-2 border-neutral-700 pt-4">
                   <p className="text-xs font-mono text-neutral-500 mb-1">WEATHER STATUS</p>
-                  <p className="font-mono text-sm text-white">{shiftOrder.weather_status}</p>
+                  <p className="font-mono text-sm text-white">
+                    {shiftOrder.weather_status || 'Clear'}
+                  </p>
                 </div>
               </div>
             )}
 
-            {/* Route Details Card */}
-            {shiftOrder?.route_details && (
+            {/* Show rerouting status when storm is active but orchestration hasn't been triggered */}
+            {stormSimulationEnabled && !shiftOrder && (
+              <div className="border-4 border-red-400 bg-neutral-900 p-6">
+                <h2 className="text-2xl font-black uppercase mb-4 text-red-400">
+                  ⚠ ACTIVELY REROUTING
+                </h2>
+                <p className="text-neutral-300">
+                  Storm detected on primary route. Alternative routes are being evaluated.
+                </p>
+                <div className="mt-4 border-t-2 border-neutral-700 pt-4">
+                  <p className="text-xs font-mono text-neutral-500 mb-1">REROUTE REASON</p>
+                  <p className="font-mono text-sm text-white">Storm Simulation Active</p>
+                </div>
+              </div>
+            )}
+
+            {/* Route Details Card - Show when route is selected */}
+            {routeDetails && (
               <div className="border-4 border-white bg-neutral-900 p-6">
                 <h2 className="text-2xl font-black uppercase mb-4">
                   ROUTE DETAILS
@@ -434,12 +883,22 @@ export default function CommandCenter({ onBack }: CommandCenterProps) {
                 <div className="space-y-4">
                   <div>
                     <p className="text-xs font-mono text-neutral-500 mb-1">DISTANCE</p>
-                    <p className="font-bold text-lg text-white">{shiftOrder.route_details.distance} km</p>
+                    <p className="font-bold text-lg text-white">
+                      {routeDetails.distanceNm.toLocaleString()} NM ({routeDetails.distanceKm.toLocaleString()} km)
+                    </p>
                   </div>
                   <div>
-                    <p className="text-xs font-mono text-neutral-500 mb-1">ESTIMATED TIME OF ARRIVAL</p>
-                    <p className="font-bold text-lg text-white">{shiftOrder.route_details.eta}</p>
+                    <p className="text-xs font-mono text-neutral-500 mb-1">TRANSIT TIME</p>
+                    <p className="font-bold text-lg text-white">
+                      {routeDetails.transitDays} days, {routeDetails.transitHours} hours
+                    </p>
                   </div>
+                  {selectedRoute && (
+                    <div>
+                      <p className="text-xs font-mono text-neutral-500 mb-1">ROUTE TYPE</p>
+                      <p className="font-bold text-lg text-white uppercase">{selectedRoute.type}</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -463,29 +922,105 @@ export default function CommandCenter({ onBack }: CommandCenterProps) {
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   />
                   
-                  {shiftOrder && (
+                  {originPort && destinationPort && (
                     <>
                       {/* Origin Marker */}
-                      <Marker position={routeCoords.origin} />
+                      <Marker position={[originPort.coordinates.lat, originPort.coordinates.lng]} />
                       
                       {/* Destination Marker */}
-                      <Marker position={routeCoords.destination} />
+                      <Marker position={[destinationPort.coordinates.lat, destinationPort.coordinates.lng]} />
                       
-                      {/* Geodesic Route Line - Curved path for global shipping */}
-                      <GeodesicLine
-                        positions={[routeCoords.origin, routeCoords.destination]}
-                        color="#00ff00"
-                        weight={3}
-                        opacity={0.8}
-                      />
+                      {/* Multiple Routes Display */}
+                      {routeOptions.length > 0 ? (
+                        // Show all route options when storm simulation is active
+                        routeOptions.map((route) => (
+                          <GeodesicLine
+                            key={route.id}
+                            positions={route.waypoints.map(wp => [wp.lat, wp.lng] as [number, number])}
+                            color={route.color}
+                            weight={route.type === 'primary' ? 2 : 3}
+                            opacity={route.type === 'primary' ? 0.5 : 0.8}
+                          />
+                        ))
+                      ) : (
+                        // Show single route when no storm simulation
+                        routeWaypoints.length > 0 && (
+                          <GeodesicLine
+                            positions={routeWaypoints}
+                            color={shiftOrder?.reroute_required ? "#00ff00" : "#3b82f6"}
+                            weight={3}
+                            opacity={0.8}
+                          />
+                        )
+                      )}
+                      
+                      {/* Storm Marker and Danger Zone */}
+                      {stormSimulationEnabled && stormLocation && (
+                        <>
+                          {/* Storm Danger Zone (Red Circle) */}
+                          <Circle
+                            center={[stormLocation.lat, stormLocation.lng]}
+                            radius={500000} // 500km radius in meters
+                            pathOptions={{
+                              color: '#ef4444',
+                              fillColor: '#ef4444',
+                              fillOpacity: 0.2,
+                              weight: 2,
+                            }}
+                          />
+                          
+                          {/* Storm Marker */}
+                          <Marker
+                            position={[stormLocation.lat, stormLocation.lng]}
+                          >
+                            <Popup>
+                              <div className="text-center">
+                                <p className="font-black text-red-600">⚠ SEVERE STORM</p>
+                                <p className="text-xs">Danger Zone: 500km radius</p>
+                              </div>
+                            </Popup>
+                          </Marker>
+                        </>
+                      )}
                     </>
                   )}
                 </MapContainer>
               </div>
               
+              {/* Map Legend */}
+              {routeOptions.length > 0 && (
+                <div className="mt-4 bg-neutral-950 border-2 border-neutral-700 p-3">
+                  <p className="text-xs font-mono text-neutral-500 mb-2">ROUTE LEGEND</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {routeOptions.map((route) => (
+                      <div key={route.id} className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: route.color }}
+                        />
+                        <span className="text-neutral-300">{route.name}</span>
+                      </div>
+                    ))}
+                    {stormSimulationEnabled && (
+                      <div className="flex items-center gap-2 col-span-2">
+                        <div className="w-3 h-3 rounded-full bg-red-500" />
+                        <span className="text-neutral-300">Storm Zone (500km)</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
               <p className="text-xs font-mono text-neutral-500 mt-4 text-center">
-                {originPort && destinationPort ? `${originPort} → ${destinationPort}` : 'NO ROUTE SET'}
+                {originPort && destinationPort
+                  ? `${originPort.code} (${originPort.city}) → ${destinationPort.code} (${destinationPort.city})`
+                  : 'NO ROUTE SET'}
               </p>
+              {selectedRoute && !stormSimulationEnabled && (
+                <p className="text-xs font-mono text-neutral-400 mt-1 text-center">
+                  {selectedRoute.name}
+                </p>
+              )}
             </div>
           </div>
         </div>
