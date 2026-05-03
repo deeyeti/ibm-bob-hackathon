@@ -41,10 +41,11 @@ Eco-Shift addresses the critical challenge of reducing carbon emissions in logis
 
 ## ✨ Features
 
-### 🤖 Multi-Agent System
+### 🤖 Multi-Agent System (Powered by IBM Bee AI Framework)
 - **Monitor Agent**: Continuously monitors weather conditions and vendor locations
 - **Auditor Agent**: Analyzes emissions, optimizes routes, and prioritizes fleet
 - **Orchestrator Agent**: Coordinates workflow between agents
+- **🆕 BeeAI Integration**: Modern tool-based architecture with enhanced AI capabilities
 
 ### 🌦️ Weather Intelligence
 - Real-time weather data from OpenWeather API
@@ -151,7 +152,8 @@ Eco-Shift addresses the critical challenge of reducing carbon emissions in logis
 ### AI & Data
 - **AI Platform**: IBM watsonx.ai
 - **Weather API**: OpenWeather
-- **Agent Framework**: Custom multi-agent system
+- **Agent Framework**: IBM Bee AI Framework 🆕
+- **Legacy Support**: Custom multi-agent system (backward compatible)
 - **Message Bus**: Custom pub/sub implementation
 
 ### Infrastructure
@@ -205,7 +207,14 @@ WATSONX_PROJECT_ID=your_project_id_here
 
 # OpenWeather
 OPENWEATHER_API_KEY=your_api_key_here
+
+# BeeAI Framework (Optional - enabled by default)
+USE_BEEAI=true
+BEEAI_LOG_LEVEL=INFO
+BEEAI_TIMEOUT=30
 ```
+
+> **🆕 BeeAI Framework**: The system now uses IBM Bee AI framework for intelligent agent coordination. Set `USE_BEEAI=false` to use legacy agents if needed.
 
 #### 4. Start Development Servers
 
@@ -343,6 +352,43 @@ The agents communicate via a custom message bus that supports:
 - Request-response patterns
 - Message expiration (TTL)
 - Message history for debugging
+
+
+### 🆕 BeeAI Framework Integration
+
+Eco-Shift now uses the **IBM Bee AI framework** for intelligent agent coordination:
+
+**Key Features**:
+- Modern tool-based architecture
+- Enhanced watsonx.ai integration
+- Better error handling and lifecycle management
+- Backward compatible with legacy agents
+
+**BeeAI Agents**:
+- `BeeAIWeatherMonitorAgent` - Weather monitoring with modular tools
+- `BeeAIAuditorAgent` - Emissions analysis with AI-powered recommendations
+- Enhanced Orchestrator - Coordinates BeeAI and legacy agents
+
+**Configuration**:
+```bash
+# Enable BeeAI (default)
+USE_BEEAI=true
+
+# Disable to use legacy agents
+USE_BEEAI=false
+```
+
+**Documentation**:
+- [BeeAI Migration Plan](BEEAI_MIGRATION_PLAN.md)
+- [BeeAI Migration Complete](BEEAI_MIGRATION_COMPLETE.md)
+- [Weather Agent Docs](apps/backend/src/agents/monitor/BEEAI_WEATHER_AGENT.md)
+- [Auditor Agent Docs](apps/backend/src/agents/auditor/BEEAI_AUDITOR.md)
+
+**Testing BeeAI Workflow**:
+```bash
+cd apps/backend
+python -m src.agents.orchestrator.orchestrator_agent
+```
 
 ---
 

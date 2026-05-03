@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     agent_auditor_enabled: bool = Field(default=True, description="Enable auditor agent")
     agent_orchestrator_enabled: bool = Field(default=True, description="Enable orchestrator agent")
     agent_polling_interval: int = Field(default=300, description="Agent polling interval (seconds)")
+    
+    # BeeAI Framework Configuration
+    use_beeai: bool = Field(default=True, description="Use BeeAI framework for agents")
+    beeai_log_level: str = Field(default="INFO", description="BeeAI framework log level")
+    beeai_timeout: int = Field(default=30, description="BeeAI agent timeout (seconds)")
 
     # Security
     secret_key: str = Field(
