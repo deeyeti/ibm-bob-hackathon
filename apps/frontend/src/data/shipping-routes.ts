@@ -4,8 +4,6 @@
  * All routes follow actual shipping lanes and avoid land masses
  */
 
-import { Port } from "./world-ports";
-
 // Key Maritime Chokepoints (for reference in routes)
 export const MARITIME_CHOKEPOINTS = {
   SUEZ_CANAL: { lat: 30.5, lng: 32.3, name: "Suez Canal" },
@@ -45,15 +43,19 @@ export const SHIPPING_ROUTES: ShippingRoute[] = [
   {
     id: "TRANSPACIFIC_ASIA_USWC",
     name: "Trans-Pacific: Asia to US West Coast",
-    description: "Major container route from Shanghai to Los Angeles",
+    description: "Major container route from Shanghai to Los Angeles following great circle",
     originPortId: "CNSHA",
     destinationPortId: "USLAX",
     waypoints: [
       { lat: 31.2304, lng: 121.4737, name: "Shanghai" },
-      { lat: 35.0, lng: 140.0 }, // East of Japan
-      { lat: 40.0, lng: 160.0 }, // Mid-Pacific
-      { lat: 38.0, lng: -170.0 }, // Approaching North America
-      { lat: 35.0, lng: -130.0 }, // Off California coast
+      { lat: 34.5, lng: 135.0 }, // East China Sea
+      { lat: 37.5, lng: 148.0 }, // East of Japan (avoiding land)
+      { lat: 40.0, lng: 162.0 }, // North Pacific
+      { lat: 41.5, lng: 176.0 }, // Mid-Pacific (great circle arc)
+      { lat: 41.0, lng: -170.0 }, // Continuing great circle
+      { lat: 39.0, lng: -155.0 }, // Approaching Hawaii latitude
+      { lat: 36.5, lng: -140.0 }, // Eastern Pacific
+      { lat: 34.0, lng: -125.0 }, // Off California coast
       { lat: 33.7405, lng: -118.272, name: "Los Angeles" },
     ],
     distanceNm: 5800,
@@ -63,15 +65,20 @@ export const SHIPPING_ROUTES: ShippingRoute[] = [
   {
     id: "TRANSPACIFIC_SINGAPORE_USWC",
     name: "Trans-Pacific: Singapore to US West Coast",
-    description: "Southern trans-Pacific route via Singapore",
+    description: "Southern trans-Pacific route via Singapore following great circle",
     originPortId: "SGSIN",
     destinationPortId: "USLGB",
     waypoints: [
       { lat: 1.2644, lng: 103.8224, name: "Singapore" },
-      { lat: 10.0, lng: 120.0 }, // South China Sea
-      { lat: 20.0, lng: 140.0 }, // Philippine Sea
-      { lat: 30.0, lng: 160.0 }, // Mid-Pacific
-      { lat: 35.0, lng: -170.0 }, // North Pacific
+      { lat: 8.0, lng: 115.0 }, // South China Sea (avoiding land)
+      { lat: 15.0, lng: 127.0 }, // Philippine Sea (east of Philippines)
+      { lat: 22.0, lng: 140.0 }, // Western Pacific
+      { lat: 28.0, lng: 153.0 }, // Mid-Pacific
+      { lat: 32.5, lng: 166.0 }, // North Pacific
+      { lat: 35.0, lng: 179.0 }, // Approaching dateline
+      { lat: 36.0, lng: -168.0 }, // Eastern Pacific
+      { lat: 35.5, lng: -150.0 }, // Continuing east
+      { lat: 34.5, lng: -132.0 }, // Off California
       { lat: 33.7701, lng: -118.1937, name: "Long Beach" },
     ],
     distanceNm: 7200,
@@ -86,15 +93,22 @@ export const SHIPPING_ROUTES: ShippingRoute[] = [
     destinationPortId: "USNYC",
     waypoints: [
       { lat: 22.3193, lng: 114.1694, name: "Hong Kong" },
-      { lat: 15.0, lng: 130.0 }, // Philippine Sea
-      { lat: 10.0, lng: 150.0 }, // Western Pacific
-      { lat: 5.0, lng: 170.0 }, // Central Pacific
-      { lat: 0.0, lng: -170.0 }, // Equatorial Pacific
-      { lat: -5.0, lng: -140.0 }, // South Pacific
-      { lat: -10.0, lng: -100.0 }, // Approaching South America
+      { lat: 18.0, lng: 125.0 }, // Philippine Sea (east of Philippines)
+      { lat: 13.0, lng: 138.0 }, // Western Pacific
+      { lat: 8.0, lng: 152.0 }, // Central Pacific
+      { lat: 3.0, lng: 166.0 }, // Equatorial Pacific
+      { lat: -2.0, lng: -179.0 }, // South Pacific (crossing dateline)
+      { lat: -6.0, lng: -165.0 }, // Continuing southeast
+      { lat: -8.0, lng: -150.0 }, // South Pacific
+      { lat: -8.0, lng: -130.0 }, // Approaching South America
+      { lat: -5.0, lng: -110.0 }, // Off Peru
+      { lat: 0.0, lng: -95.0 }, // Off Ecuador
+      { lat: 5.0, lng: -85.0 }, // Approaching Panama
       { lat: 9.3547, lng: -79.9009, name: "Panama Canal" },
-      { lat: 15.0, lng: -75.0 }, // Caribbean
-      { lat: 25.0, lng: -70.0 }, // Atlantic
+      { lat: 13.0, lng: -77.0 }, // Caribbean Sea
+      { lat: 20.0, lng: -73.0 }, // Western Atlantic
+      { lat: 28.0, lng: -72.0 }, // Off Bahamas
+      { lat: 35.0, lng: -73.0 }, // Approaching US East Coast
       { lat: 40.7128, lng: -74.006, name: "New York" },
     ],
     distanceNm: 11500,
@@ -159,15 +173,20 @@ export const SHIPPING_ROUTES: ShippingRoute[] = [
   {
     id: "TRANSATLANTIC_EUROPE_USEC",
     name: "Trans-Atlantic: Europe to US East Coast",
-    description: "Container route from Rotterdam to New York",
+    description: "Container route from Rotterdam to New York following great circle",
     originPortId: "NLRTM",
     destinationPortId: "USNYC",
     waypoints: [
       { lat: 51.9244, lng: 4.4777, name: "Rotterdam" },
-      { lat: 50.0, lng: -5.0 }, // English Channel
-      { lat: 48.0, lng: -15.0 }, // Off Ireland
-      { lat: 45.0, lng: -30.0 }, // Mid-Atlantic
-      { lat: 42.0, lng: -50.0 }, // Western Atlantic
+      { lat: 51.0, lng: -2.0 }, // English Channel
+      { lat: 50.5, lng: -8.0 }, // Off Ireland (south)
+      { lat: 50.0, lng: -15.0 }, // Western Ireland
+      { lat: 49.5, lng: -22.0 }, // North Atlantic (great circle arc)
+      { lat: 48.5, lng: -30.0 }, // Mid-Atlantic
+      { lat: 47.0, lng: -38.0 }, // Continuing west
+      { lat: 45.0, lng: -46.0 }, // Western Atlantic
+      { lat: 43.0, lng: -54.0 }, // Off Newfoundland
+      { lat: 41.5, lng: -62.0 }, // Approaching US coast
       { lat: 40.7128, lng: -74.006, name: "New York" },
     ],
     distanceNm: 3200,
@@ -177,16 +196,21 @@ export const SHIPPING_ROUTES: ShippingRoute[] = [
   {
     id: "TRANSATLANTIC_MEDITERRANEAN_USEC",
     name: "Trans-Atlantic: Mediterranean to US East Coast",
-    description: "Route from Barcelona to Miami",
+    description: "Route from Barcelona to Miami following great circle",
     originPortId: "ESBCN",
     destinationPortId: "USMIA",
     waypoints: [
       { lat: 41.3851, lng: 2.1734, name: "Barcelona" },
-      { lat: 38.0, lng: -5.0 }, // Gibraltar approach
-      { lat: 36.0, lng: -10.0 }, // Off Morocco
-      { lat: 32.0, lng: -20.0 }, // Eastern Atlantic
-      { lat: 28.0, lng: -40.0 }, // Mid-Atlantic
-      { lat: 25.0, lng: -60.0 }, // Western Atlantic
+      { lat: 39.0, lng: -2.0 }, // Off Spain
+      { lat: 36.5, lng: -6.0 }, // Strait of Gibraltar approach
+      { lat: 36.0, lng: -6.0, name: "Strait of Gibraltar" },
+      { lat: 35.0, lng: -12.0 }, // Off Morocco
+      { lat: 33.0, lng: -20.0 }, // Eastern Atlantic
+      { lat: 31.0, lng: -28.0 }, // Mid-Atlantic
+      { lat: 29.0, lng: -38.0 }, // Continuing west
+      { lat: 27.5, lng: -48.0 }, // Western Atlantic
+      { lat: 26.5, lng: -58.0 }, // Approaching Caribbean
+      { lat: 26.0, lng: -68.0 }, // Off Bahamas
       { lat: 25.7617, lng: -80.1918, name: "Miami" },
     ],
     distanceNm: 4500,
@@ -1034,6 +1058,241 @@ export const calculateDistance = (
       Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+};
+
+/**
+ * Calculate bearing from point 1 to point 2
+ * @returns Bearing in degrees (0-360)
+ */
+export const calculateBearing = (
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number => {
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const lat1Rad = (lat1 * Math.PI) / 180;
+  const lat2Rad = (lat2 * Math.PI) / 180;
+  
+  const y = Math.sin(dLng) * Math.cos(lat2Rad);
+  const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) -
+            Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLng);
+  const bearing = Math.atan2(y, x);
+  
+  return ((bearing * 180 / Math.PI) + 360) % 360;
+};
+
+/**
+ * Calculate destination point given start point, bearing, and distance
+ * @param lat Starting latitude in degrees
+ * @param lng Starting longitude in degrees
+ * @param bearing Bearing in degrees
+ * @param distanceNm Distance in nautical miles
+ * @returns Destination point {lat, lng}
+ */
+export const calculateDestination = (
+  lat: number,
+  lng: number,
+  bearing: number,
+  distanceNm: number
+): { lat: number; lng: number } => {
+  const R = 3440.065; // Earth's radius in nautical miles
+  const bearingRad = (bearing * Math.PI) / 180;
+  const latRad = (lat * Math.PI) / 180;
+  const lngRad = (lng * Math.PI) / 180;
+  const angularDistance = distanceNm / R;
+  
+  const lat2Rad = Math.asin(
+    Math.sin(latRad) * Math.cos(angularDistance) +
+    Math.cos(latRad) * Math.sin(angularDistance) * Math.cos(bearingRad)
+  );
+  
+  const lng2Rad = lngRad + Math.atan2(
+    Math.sin(bearingRad) * Math.sin(angularDistance) * Math.cos(latRad),
+    Math.cos(angularDistance) - Math.sin(latRad) * Math.sin(lat2Rad)
+  );
+  
+  return {
+    lat: (lat2Rad * 180) / Math.PI,
+    lng: (lng2Rad * 180) / Math.PI
+  };
+};
+
+/**
+ * Generate waypoints for a great circle route between two points
+ * This creates a realistic ocean route following the shortest path on a sphere
+ * @param lat1 Start latitude
+ * @param lng1 Start longitude
+ * @param lat2 End latitude
+ * @param lng2 End longitude
+ * @param numWaypoints Number of intermediate waypoints to generate
+ * @returns Array of waypoints including start and end points
+ */
+export const generateGreatCircleRoute = (
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+  numWaypoints: number = 5
+): RouteWaypoint[] => {
+  const waypoints: RouteWaypoint[] = [];
+  
+  // Add start point
+  waypoints.push({ lat: lat1, lng: lng1 });
+  
+  // Calculate intermediate points along great circle
+  for (let i = 1; i < numWaypoints; i++) {
+    const fraction = i / numWaypoints;
+    
+    // Convert to radians
+    const lat1Rad = (lat1 * Math.PI) / 180;
+    const lng1Rad = (lng1 * Math.PI) / 180;
+    const lat2Rad = (lat2 * Math.PI) / 180;
+    const lng2Rad = (lng2 * Math.PI) / 180;
+    
+    // Calculate angular distance
+    const d = Math.acos(
+      Math.sin(lat1Rad) * Math.sin(lat2Rad) +
+      Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.cos(lng2Rad - lng1Rad)
+    );
+    
+    // Interpolate
+    const a = Math.sin((1 - fraction) * d) / Math.sin(d);
+    const b = Math.sin(fraction * d) / Math.sin(d);
+    
+    const x = a * Math.cos(lat1Rad) * Math.cos(lng1Rad) +
+              b * Math.cos(lat2Rad) * Math.cos(lng2Rad);
+    const y = a * Math.cos(lat1Rad) * Math.sin(lng1Rad) +
+              b * Math.cos(lat2Rad) * Math.sin(lng2Rad);
+    const z = a * Math.sin(lat1Rad) + b * Math.sin(lat2Rad);
+    
+    const latRad = Math.atan2(z, Math.sqrt(x * x + y * y));
+    const lngRad = Math.atan2(y, x);
+    
+    waypoints.push({
+      lat: (latRad * 180) / Math.PI,
+      lng: (lngRad * 180) / Math.PI
+    });
+  }
+  
+  // Add end point
+  waypoints.push({ lat: lat2, lng: lng2 });
+  
+  return waypoints;
+};
+
+/**
+ * Generate storm avoidance route that goes AROUND a storm location
+ * @param originalRoute Original route waypoints
+ * @param stormLat Storm center latitude
+ * @param stormLng Storm center longitude
+ * @param stormRadiusNm Storm radius in nautical miles (default 300nm)
+ * @param safetyMarginNm Additional safety margin in nautical miles (default 200nm)
+ * @returns New route that avoids the storm
+ */
+export const generateStormAvoidanceRoute = (
+  originalRoute: RouteWaypoint[],
+  stormLat: number,
+  stormLng: number,
+  stormRadiusNm: number = 300,
+  safetyMarginNm: number = 200
+): RouteWaypoint[] => {
+  const avoidanceRoute: RouteWaypoint[] = [];
+  const totalAvoidanceRadius = stormRadiusNm + safetyMarginNm;
+  
+  // Check each segment of the original route
+  for (let i = 0; i < originalRoute.length - 1; i++) {
+    const start = originalRoute[i];
+    const end = originalRoute[i + 1];
+    
+    avoidanceRoute.push(start);
+    
+    // Calculate closest point on segment to storm
+    const segmentBearing = calculateBearing(start.lat, start.lng, end.lat, end.lng);
+    const distanceToStormFromStart = calculateDistance(start.lat, start.lng, stormLat, stormLng);
+    const distanceToStormFromEnd = calculateDistance(end.lat, end.lng, stormLat, stormLng);
+    
+    // Check if storm is close to this segment
+    const minDistanceToStorm = Math.min(distanceToStormFromStart, distanceToStormFromEnd);
+    
+    if (minDistanceToStorm < totalAvoidanceRadius) {
+      // Storm is too close, need to route around it
+      
+      // Calculate bearing from storm to segment midpoint
+      const midLat = (start.lat + end.lat) / 2;
+      const midLng = (start.lng + end.lng) / 2;
+      const bearingFromStorm = calculateBearing(stormLat, stormLng, midLat, midLng);
+      
+      // Determine which side to go around (perpendicular to segment bearing)
+      // Go to the side that's already closer to the route
+      const perpendicularBearing1 = (segmentBearing + 90) % 360;
+      const perpendicularBearing2 = (segmentBearing - 90 + 360) % 360;
+      
+      // Choose the perpendicular bearing that's closer to the bearing from storm
+      const diff1 = Math.abs(perpendicularBearing1 - bearingFromStorm);
+      const diff2 = Math.abs(perpendicularBearing2 - bearingFromStorm);
+      const avoidanceBearing = diff1 < diff2 ? perpendicularBearing1 : perpendicularBearing2;
+      
+      // Create detour waypoints around the storm
+      const detourDistance = totalAvoidanceRadius * 1.5; // Go well around
+      
+      // First detour point: move away from storm
+      const detour1 = calculateDestination(
+        stormLat,
+        stormLng,
+        avoidanceBearing,
+        detourDistance
+      );
+      
+      // Second detour point: continue around storm
+      const detour2 = calculateDestination(
+        stormLat,
+        stormLng,
+        (avoidanceBearing + 45) % 360,
+        detourDistance
+      );
+      
+      // Third detour point: start heading back to route
+      const detour3 = calculateDestination(
+        stormLat,
+        stormLng,
+        (avoidanceBearing + 90) % 360,
+        detourDistance
+      );
+      
+      avoidanceRoute.push(
+        { ...detour1, name: 'Storm Avoidance Point 1' },
+        { ...detour2, name: 'Storm Avoidance Point 2' },
+        { ...detour3, name: 'Storm Avoidance Point 3' }
+      );
+    }
+  }
+  
+  // Add final destination
+  avoidanceRoute.push(originalRoute[originalRoute.length - 1]);
+  
+  return avoidanceRoute;
+};
+
+/**
+ * Calculate total distance of a route with multiple waypoints
+ * @param waypoints Array of route waypoints
+ * @returns Total distance in nautical miles
+ */
+export const calculateRouteDistance = (waypoints: RouteWaypoint[]): number => {
+  let totalDistance = 0;
+  
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const distance = calculateDistance(
+      waypoints[i].lat,
+      waypoints[i].lng,
+      waypoints[i + 1].lat,
+      waypoints[i + 1].lng
+    );
+    totalDistance += distance;
+  }
+  
+  return totalDistance;
 };
 
 // Made with Bob

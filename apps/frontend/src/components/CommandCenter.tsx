@@ -5,7 +5,14 @@ import dynamic from 'next/dynamic'
 import { orchestratorAPI, chatAPI } from '@/lib/api'
 import { OrchestratorResponse, AgentLog, ChatMessage } from '@/types'
 import { Port, getPortById } from '@/data/world-ports'
-import { ShippingRoute, getRoutesBetweenPorts, calculateDistance, RouteWaypoint } from '@/data/shipping-routes'
+import {
+  ShippingRoute,
+  getRoutesBetweenPorts,
+  RouteWaypoint,
+  generateStormAvoidanceRoute,
+  calculateRouteDistance,
+  generateGreatCircleRoute
+} from '@/data/shipping-routes'
 import { PortSelector } from '@/components/ui/PortSelector'
 import gsap from 'gsap'
 import 'leaflet/dist/leaflet.css'
@@ -176,23 +183,30 @@ export default function CommandCenter({ onBack }: CommandCenterProps) {
       if (routes.length > 0) {
         setSelectedRoute(routes[0])
       } else {
-        // Create a simple direct route if no predefined route exists
-        const distance = calculateDistance(
+        // Create a realistic great circle route if no predefined route exists
+        // This follows the shortest path on a sphere (geodesic)
+        const waypoints = generateGreatCircleRoute(
           originPort.coordinates.lat,
           originPort.coordinates.lng,
           destinationPort.coordinates.lat,
-          destinationPort.coordinates.lng
+          destinationPort.coordinates.lng,
+          8 // Generate 8 intermediate waypoints for smooth ocean curve
         )
+        
+        // Add port names to start and end
+        waypoints[0].name = originPort.name
+        waypoints[waypoints.length - 1].name = destinationPort.name
+        
+        // Calculate actual route distance
+        const distance = calculateRouteDistance(waypoints)
+        
         setSelectedRoute({
           id: `${originPort.id}-${destinationPort.id}`,
           name: `${originPort.city} to ${destinationPort.city}`,
-          description: 'Direct route',
+          description: 'Great circle route (shortest ocean path)',
           originPortId: originPort.id,
           destinationPortId: destinationPort.id,
-          waypoints: [
-            { lat: originPort.coordinates.lat, lng: originPort.coordinates.lng, name: originPort.name },
-            { lat: destinationPort.coordinates.lat, lng: destinationPort.coordinates.lng, name: destinationPort.name },
-          ],
+          waypoints: waypoints,
           distanceNm: Math.round(distance),
           typicalTransitDays: Math.ceil(distance / 400), // Assuming ~400 nm per day
           type: 'container',
@@ -253,51 +267,64 @@ export default function CommandCenter({ onBack }: CommandCenterProps) {
   const generateAlternativeRoutes = (primary: ShippingRoute, stormLat: number, stormLng: number): RouteOption[] => {
     const routes: RouteOption[] = []
     
-    // Primary route (original)
+    // Primary route (original) - marked as dangerous due to storm
     routes.push({
       id: 'primary',
-      name: 'Primary Route',
+      name: 'Primary Route (Storm Warning)',
       waypoints: primary.waypoints,
       distanceNm: primary.distanceNm,
       transitDays: primary.typicalTransitDays,
       type: 'primary',
-      color: '#3b82f6', // blue
+      color: '#ef4444', // red - dangerous
     })
     
-    // Alternative route (storm avoidance) - route around storm
-    const altWaypoints = [...primary.waypoints]
-    const midIndex = Math.floor(altWaypoints.length / 2)
-    
-    // Insert detour waypoints around storm
-    const detourOffset = 15 // degrees offset
-    altWaypoints.splice(midIndex, 0,
-      { lat: stormLat + detourOffset, lng: stormLng - detourOffset, name: 'Detour Point 1' },
-      { lat: stormLat + detourOffset, lng: stormLng + detourOffset, name: 'Detour Point 2' }
+    // Alternative route (storm avoidance) - intelligently routes AROUND storm
+    // Using the new storm avoidance algorithm
+    const stormAvoidanceWaypoints = generateStormAvoidanceRoute(
+      primary.waypoints,
+      stormLat,
+      stormLng,
+      300, // Storm radius: 300 nautical miles
+      200  // Safety margin: 200 nautical miles
     )
     
-    // Calculate new distance (approximately 20% longer)
-    const altDistance = Math.round(primary.distanceNm * 1.2)
+    // Calculate actual distance of the avoidance route
+    const altDistance = Math.round(calculateRouteDistance(stormAvoidanceWaypoints))
     
     routes.push({
       id: 'alternative',
       name: 'Storm Avoidance Route',
-      waypoints: altWaypoints,
+      waypoints: stormAvoidanceWaypoints,
       distanceNm: altDistance,
-      transitDays: Math.ceil(primary.typicalTransitDays * 1.15),
+      transitDays: Math.ceil((altDistance / primary.distanceNm) * primary.typicalTransitDays),
       type: 'alternative',
-      color: '#f59e0b', // amber
+      color: '#f59e0b', // amber - safe alternative
     })
     
-    // Eco-friendly route (optimized for emissions)
-    const ecoWaypoints = [...primary.waypoints]
-    const ecoDistance = Math.round(primary.distanceNm * 1.05) // Slightly longer but more efficient
+    // Eco-friendly route (optimized for emissions) - uses great circle route
+    // This follows the shortest path on a sphere (geodesic)
+    const origin = primary.waypoints[0]
+    const destination = primary.waypoints[primary.waypoints.length - 1]
+    const ecoWaypoints = generateGreatCircleRoute(
+      origin.lat,
+      origin.lng,
+      destination.lat,
+      destination.lng,
+      8 // Generate 8 intermediate waypoints for smooth curve
+    )
+    
+    // Add names to start and end points
+    ecoWaypoints[0].name = origin.name
+    ecoWaypoints[ecoWaypoints.length - 1].name = destination.name
+    
+    const ecoDistance = Math.round(calculateRouteDistance(ecoWaypoints))
     
     routes.push({
       id: 'eco',
-      name: 'Eco-Optimized Route',
+      name: 'Eco-Optimized Route (Great Circle)',
       waypoints: ecoWaypoints,
       distanceNm: ecoDistance,
-      transitDays: Math.ceil(primary.typicalTransitDays * 1.1),
+      transitDays: Math.ceil((ecoDistance / primary.distanceNm) * primary.typicalTransitDays),
       type: 'eco',
       color: '#10b981', // green
     })
