@@ -248,9 +248,26 @@ export const orchestratorAPI = {
   /**
    * Trigger orchestration workflow
    */
-  orchestrate: async (targetLocation: string) => {
+  orchestrate: async (origin: string, destination: string) => {
     const response = await apiClient.post('/api/orchestrate', {
-      target_location: targetLocation,
+      origin,
+      destination,
+    })
+    return response.data
+  },
+}
+
+/**
+ * Chat API
+ */
+export const chatAPI = {
+  /**
+   * Send a chat message to the AI assistant
+   */
+  sendMessage: async (message: string, shiftOrderContext?: any) => {
+    const response = await apiClient.post('/api/chat', {
+      message,
+      shift_order_context: shiftOrderContext,
     })
     return response.data
   },

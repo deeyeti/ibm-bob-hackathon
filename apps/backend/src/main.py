@@ -9,6 +9,7 @@ from typing import Dict, Any
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -70,11 +71,13 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
     logger.error(f"HTTP error: {exc.status_code} - {exc.detail}")
     return JSONResponse(
         status_code=exc.status_code,
-        content=ErrorResponse(
-            error="HTTPException",
-            message=str(exc.detail),
-            timestamp=datetime.utcnow(),
-        ).model_dump(),
+        content=jsonable_encoder(
+            ErrorResponse(
+                error="HTTPException",
+                message=str(exc.detail),
+                timestamp=datetime.utcnow(),
+            ).model_dump()
+        ),
     )
 
 
@@ -84,12 +87,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     logger.error(f"Validation error: {exc.errors()}")
     return JSONResponse(
         status_code=422,
-        content=ErrorResponse(
-            error="ValidationError",
-            message="Request validation failed",
-            detail=str(exc.errors()),
-            timestamp=datetime.utcnow(),
-        ).model_dump(),
+        content=jsonable_encoder(
+            ErrorResponse(
+                error="ValidationError",
+                message="Request validation failed",
+                detail=str(exc.errors()),
+                timestamp=datetime.utcnow(),
+            ).model_dump()
+        ),
     )
 
 
@@ -99,12 +104,14 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
     logger.exception(f"Unhandled exception: {exc}")
     return JSONResponse(
         status_code=500,
-        content=ErrorResponse(
-            error="InternalServerError",
-            message="An unexpected error occurred",
-            detail=str(exc) if settings.debug else None,
-            timestamp=datetime.utcnow(),
-        ).model_dump(),
+        content=jsonable_encoder(
+            ErrorResponse(
+                error="InternalServerError",
+                message="An unexpected error occurred",
+                detail=str(exc) if settings.debug else None,
+                timestamp=datetime.utcnow(),
+            ).model_dump()
+        ),
     )
 
 

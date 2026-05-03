@@ -277,7 +277,8 @@ export interface AsyncState<T> {
 // ============================================================================
 
 export interface OrchestratorRequest {
-  target_location: string
+  origin: string
+  destination: string
 }
 
 export interface OrchestratorResponse {
@@ -290,6 +291,12 @@ export interface OrchestratorResponse {
   weather_status?: string
   timestamp: string
   error?: string
+  route_details?: {
+    distance: number
+    eta: string
+    origin_coords?: [number, number]
+    destination_coords?: [number, number]
+  }
 }
 
 export interface AgentLog {
@@ -298,6 +305,27 @@ export interface AgentLog {
   agent: 'monitor' | 'auditor' | 'orchestrator'
   level: 'info' | 'warning' | 'error' | 'success'
   message: string
+}
+
+// ============================================================================
+// Chat Types
+// ============================================================================
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: string
+}
+
+export interface ChatRequest {
+  message: string
+  shift_order_context?: any
+}
+
+export interface ChatResponse {
+  response: string
+  timestamp: string
 }
 
 // Made with Bob

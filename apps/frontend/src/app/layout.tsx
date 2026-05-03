@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Space_Grotesk, JetBrains_Mono } from 'next/font/google'
 import '@/styles/globals.css'
+import 'leaflet/dist/leaflet.css'
 
 const inter = Inter({
   subsets: ['latin'],
