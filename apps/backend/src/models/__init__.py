@@ -28,6 +28,9 @@ from .schemas import (
     # Analysis Models
     EmissionAnalysis,
     OptimizationSuggestion,
+    # Chat Models
+    ChatRequest,
+    ChatResponse,
     # Error Models
     ErrorResponse,
 )
@@ -60,6 +63,9 @@ __all__ = [
     # Analysis Models
     "EmissionAnalysis",
     "OptimizationSuggestion",
+    # Chat Models
+    "ChatRequest",
+    "ChatResponse",
     # Error Models
     "ErrorResponse",
 ]

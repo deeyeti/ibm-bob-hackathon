@@ -1,6 +1,7 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from "next";
 import { Inter, Space_Grotesk, JetBrains_Mono } from 'next/font/google'
 import '@/styles/globals.css'
+import 'leaflet/dist/leaflet.css'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -21,14 +22,17 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Eco-Shift | AI-Powered Supply Chain Orchestrator',
-  description: 'Multi-agent supply chain orchestrator for sustainable logistics and emissions tracking',
-  keywords: ['supply chain', 'sustainability', 'AI', 'emissions tracking', 'logistics'],
-  authors: [{ name: 'Eco-Shift Team' }],
-  viewport: 'width=device-width, initial-scale=1',
-  themeColor: '#22c55e',
-}
+  title: "Eco-Shift Command Center",
+  description: "AI-Powered Supply Chain Rerouting",
+  // Remove viewport and themeColor from here
+};
 
+// Add this new export block:
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#000000",
+};
 export default function RootLayout({
   children,
 }: {

@@ -4,7 +4,7 @@
 add env file, add the following keys:
 
 openweather api key : "REDACTED_KEY"
-ibm api key : "gznEmo9E5dAR-Y881uQluLK8DIANHBuNBQq2LH3-VO2c"
+ibm api key : "REDACTED_KEY"
 watsonx project id : "03ef5fce-763c-42fe-b106-65dd74b154d4"
 </task>
 <environment_details>
@@ -509,7 +509,7 @@ Based on the project structure, I need to create environment files at three leve
 ### 1. **Root Level `.env`** (Master Configuration)
 This file will contain all configuration for the entire project, including:
 - OpenWeather API Key: `REDACTED_KEY`
-- IBM watsonx API Key: `gznEmo9E5dAR-Y881uQluLK8DIANHBuNBQq2LH3-VO2c`
+- IBM watsonx API Key: `REDACTED_KEY`
 - watsonx Project ID: `03ef5fce-763c-42fe-b106-65dd74b154d4`
 
 ### 2. **Backend `.env`** (`apps/backend/.env`)
@@ -723,7 +723,7 @@ The Eco-Shift project uses a three-tier environment configuration:
 ### 🔑 API Keys to Configure
 
 - **OpenWeather API Key**: `REDACTED_KEY`
-- **IBM watsonx API Key**: `gznEmo9E5dAR-Y881uQluLK8DIANHBuNBQq2LH3-VO2c`
+- **IBM watsonx API Key**: `REDACTED_KEY`
 - **watsonx Project ID**: `03ef5fce-763c-42fe-b106-65dd74b154d4`
 
 ### 📝 Detailed Implementation Plan
@@ -893,7 +893,7 @@ CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 # -----------------------------------------------------------------------------
 # IBM watsonx.ai Configuration
 # -----------------------------------------------------------------------------
-WATSONX_API_KEY=gznEmo9E5dAR-Y881uQluLK8DIANHBuNBQq2LH3-VO2c
+WATSONX_API_KEY=REDACTED_KEY
 WATSONX_PROJECT_ID=03ef5fce-763c-42fe-b106-65dd74b154d4
 WATSONX_URL=https://us-south.ml.cloud.ibm.com
 
@@ -1133,13 +1133,13 @@ CORS_ALLOW_METHODS=*
 CORS_ALLOW_HEADERS=*
 
 # IBM watsonx.ai Configuration
-WATSONX_API_KEY=gznEmo9E5dAR-Y881uQluLK8DIANHBuNBQq2LH3-VO2c
+WATSONX_API_KEY=REDACTED_KEY
 WATSONX_PROJECT_ID=03ef5fce-763c-42fe-b106-65dd74b154d4
 WATSONX_URL=https://us-south.ml.cloud.ibm.com
 WATSONX_MODEL_ID=ibm/granite-13b-chat-v2
 
 # IBM Watson Machine Learning (Alternative)
-IBM_CLOUD_API_KEY=gznEmo9E5dAR-Y881uQluLK8DIANHBuNBQq2LH3-VO2c
+IBM_CLOUD_API_KEY=REDACTED_KEY
 IBM_CLOUD_URL=https://us-south.ml.cloud.ibm.com
 
 # OpenWeather API Configuration
@@ -1471,7 +1471,7 @@ IMPORTANT: When task status changes, remember to call the `update_todo_list` too
 
 **1. Root `.env` file** (d:/Projects/ibm/ibm-bob-hackathon/.env)
    - OpenWeather API Key: REDACTED_KEY
-   - IBM watsonx API Key: gznEmo9E5dAR-Y881uQluLK8DIANHBuNBQq2LH3-VO2c
+   - IBM watsonx API Key: REDACTED_KEY
    - watsonx Project ID: 03ef5fce-763c-42fe-b106-65dd74b154d4
    - All default settings configured for development
 
@@ -6465,7 +6465,7 @@ result = await run_beeai_orchestrator_workflow(
 
 Already configured in your `.env` files:
 - ✅ `OPENWEATHER_API_KEY`: REDACTED_KEY
-- ✅ `WATSONX_API_KEY`: gznEmo9E5dAR-Y881uQluLK8DIANHBuNBQq2LH3-VO2c
+- ✅ `WATSONX_API_KEY`: REDACTED_KEY
 - ✅ `WATSONX_PROJECT_ID`: 03ef5fce-763c-42fe-b106-65dd74b154d4
 
 Optional:

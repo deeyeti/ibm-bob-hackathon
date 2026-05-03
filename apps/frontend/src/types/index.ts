@@ -272,4 +272,60 @@ export interface AsyncState<T> {
   error: string | null
 }
 
+// ============================================================================
+// Orchestrator Types
+// ============================================================================
+
+export interface OrchestratorRequest {
+  origin: string
+  destination: string
+}
+
+export interface OrchestratorResponse {
+  workflow_id: string
+  status: 'completed' | 'error'
+  reroute_required: boolean
+  approved_vendor_id?: string
+  emissions_saving?: string
+  justification?: string
+  weather_status?: string
+  timestamp: string
+  error?: string
+  route_details?: {
+    distance: number
+    eta: string
+    origin_coords?: [number, number]
+    destination_coords?: [number, number]
+  }
+}
+
+export interface AgentLog {
+  id: string
+  timestamp: string
+  agent: 'monitor' | 'auditor' | 'orchestrator'
+  level: 'info' | 'warning' | 'error' | 'success'
+  message: string
+}
+
+// ============================================================================
+// Chat Types
+// ============================================================================
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: string
+}
+
+export interface ChatRequest {
+  message: string
+  shift_order_context?: any
+}
+
+export interface ChatResponse {
+  response: string
+  timestamp: string
+}
+
 // Made with Bob

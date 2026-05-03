@@ -242,6 +242,38 @@ export const fleetsAPI = {
 }
 
 /**
+ * Orchestrator API
+ */
+export const orchestratorAPI = {
+  /**
+   * Trigger orchestration workflow
+   */
+  orchestrate: async (origin: string, destination: string) => {
+    const response = await apiClient.post('/api/orchestrate', {
+      origin,
+      destination,
+    })
+    return response.data
+  },
+}
+
+/**
+ * Chat API
+ */
+export const chatAPI = {
+  /**
+   * Send a chat message to the AI assistant
+   */
+  sendMessage: async (message: string, shiftOrderContext?: any) => {
+    const response = await apiClient.post('/api/chat', {
+      message,
+      shift_order_context: shiftOrderContext,
+    })
+    return response.data
+  },
+}
+
+/**
  * Health Check API
  */
 export const healthAPI = {

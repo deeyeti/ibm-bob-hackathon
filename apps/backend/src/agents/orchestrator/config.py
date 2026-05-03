@@ -67,6 +67,11 @@ class OrchestratorConfig(BaseModel):
         description="Enable parallel execution of agent tasks"
     )
     
+    use_beeai: bool = Field(
+        default=True,
+        description="Use BeeAI framework agents instead of legacy agents"
+    )
+    
     # Logging settings
     log_level: str = Field(
         default=os.getenv("LOG_LEVEL", "INFO"),

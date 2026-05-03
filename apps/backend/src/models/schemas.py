@@ -186,7 +186,24 @@ class OptimizationSuggestion(BaseModel):
     implementation_cost: Optional[float] = Field(default=None, description="Implementation cost")
     priority: str = Field(description="Priority level (high/medium/low)")
     category: str = Field(description="Suggestion category")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Suggestion timestamp")
+
+# Chat Models
+class ChatRequest(BaseModel):
+    """Chat request model."""
+    message: str = Field(description="User's question or message")
+    shift_order_context: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Current Shift Order data for context"
+    )
+
+
+class ChatResponse(BaseModel):
+    """Chat response model."""
+    response: str = Field(description="AI assistant's response")
+    timestamp: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Response timestamp"
+    )
 
 
 # Error Models
