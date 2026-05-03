@@ -45,7 +45,7 @@ export default function Home() {
           </div>
           <div className="flex flex-wrap gap-4">
             <button className="btn-primary" onClick={() => setShowDashboard(true)}>Launch Dashboard</button>
-            <button className="btn-outline">View Documentation</button>
+            <button className="btn-outline" onClick={() => window.open("https://github.com/deeyeti/ibm-bob-hackathon", "_blank")} > View Documentation </button>
           </div>
         </div>
       </section>
